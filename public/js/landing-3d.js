@@ -4,11 +4,12 @@
  * Features:
  * - Default view: TEGAP (straight front-facing, upright, non-tilted) exactly like the 2D UI.
  * - Colors: 100% identical to the original deep navy & rich corporate palette (#0c145e, #23459c, etc.).
- * - Fully Interactive 3D Rotation: User can click & drag (or touch drag) to rotate in all directions in 3D!
+ * - Generous camera framing & adaptive frustum: NO CLIPPING / NEVER CUT OFF at top or bottom.
+ * - Fully Interactive 3D Rotation: User can click & drag (or touch drag) to rotate in 3D.
  * - Interactive hover parallax tilt when hovering with mouse.
  * - Double-click / tap to smoothly reset orientation back to tegap (0, 0).
  * - 9 Raised 3D Mechanical Calculator Keys with spring push click, hover lift, and idle wave.
- * - "Akses Semua Layanan Dalam Satu Portal" etched on the chassis face.
+ * - "Akses Semua Layanan Dalam Satu Portal" etched safely on chassis face without clipping.
  */
 
 (function () {
@@ -99,10 +100,12 @@
 
     const width = container.clientWidth || 500;
     const height = container.clientHeight || 500;
+    const aspect = width / height;
 
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    // Camera positioned straight in front for clean, tegap view
-    camera.position.set(0, 0, 18.6);
+    const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 100);
+    // Camera positioned with generous breathing room so model is NEVER cut off
+    const baseCameraZ = 24.5;
+    camera.position.set(0, 0, aspect < 1 ? baseCameraZ / aspect : baseCameraZ);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({
@@ -135,11 +138,9 @@
     deviceGroup.rotation.set(0, 0, 0);
 
     // --- Lighting: Balanced to preserve 100% color accuracy while giving 3D bevels ---
-    // Pure white ambient light keeps front face colors solid and rich
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.98);
     scene.add(ambientLight);
 
-    // Key directional light for bevel specular highlights and soft drop shadows
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
     keyLight.position.set(12, 16, 18);
     keyLight.castShadow = true;
@@ -154,7 +155,6 @@
     keyLight.shadow.camera.bottom = -9;
     scene.add(keyLight);
 
-    // Subtle blue rim light from bottom left to delineate 3D edges
     const rimLight = new THREE.DirectionalLight(0x243b91, 0.5);
     rimLight.position.set(-14, -10, 10);
     scene.add(rimLight);
@@ -167,8 +167,8 @@
         const sctx = shadowCanvas.getContext('2d');
 
         const grad = sctx.createRadialGradient(128, 128, 10, 128, 128, 120);
-        grad.addColorStop(0, 'rgba(8, 12, 60, 0.40)');
-        grad.addColorStop(0.6, 'rgba(12, 20, 94, 0.18)');
+        grad.addColorStop(0, 'rgba(8, 12, 60, 0.35)');
+        grad.addColorStop(0.6, 'rgba(12, 20, 94, 0.15)');
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         sctx.fillStyle = grad;
         sctx.fillRect(0, 0, 256, 256);
@@ -178,19 +178,19 @@
             map: shadowTex,
             transparent: true,
             depthWrite: false,
-            opacity: 0.75
+            opacity: 0.70
         });
-        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 16.5), shadowMat);
+        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), shadowMat);
         shadowMesh.position.set(0, -0.2, -1.2);
         deviceGroup.add(shadowMesh);
     })();
 
     // --- 1. 3D Calculator Chassis / Body ---
-    const chassisWidth = 11.4;
-    const chassisHeight = 11.8;
-    const chassisRadius = 1.45;
+    const chassisWidth = 11.2;
+    const chassisHeight = 11.4;
+    const chassisRadius = 1.4;
     const chassisDepth = 1.0;
-    const chassisBevel = 0.32;
+    const chassisBevel = 0.30;
 
     const chassisShape = createRoundedRectShape(chassisWidth, chassisHeight, chassisRadius);
     const chassisGeo = new THREE.ExtrudeGeometry(chassisShape, {
@@ -207,23 +207,23 @@
     });
     chassisGeo.center();
 
-    // Chassis Front Texture (Exact #0c145e dark navy, recessed tray & bottom text)
+    // Chassis Front Texture (Exact #0c145e dark navy, recessed tray & safely padded bottom text)
     const chassisCanvas = document.createElement('canvas');
     chassisCanvas.width = 1024;
-    chassisCanvas.height = 1060;
+    chassisCanvas.height = 1024;
     const cctx = chassisCanvas.getContext('2d');
 
     function renderChassisCanvas() {
-        cctx.clearRect(0, 0, 1024, 1060);
+        cctx.clearRect(0, 0, 1024, 1024);
 
         // Exact dark navy background matching original 2D container
         cctx.fillStyle = '#0c145e';
-        cctx.fillRect(0, 0, 1024, 1060);
+        cctx.fillRect(0, 0, 1024, 1024);
 
         // Inset keypad well where buttons sit
         cctx.save();
         cctx.fillStyle = '#080d44';
-        drawRoundRect(cctx, 56, 56, 912, 860, 44);
+        drawRoundRect(cctx, 56, 56, 912, 796, 42);
         cctx.fill();
 
         // Well subtle inset border
@@ -232,13 +232,13 @@
         cctx.stroke();
         cctx.restore();
 
-        // Bottom text: "Akses Semua Layanan Dalam Satu Portal" (Exact match)
+        // Bottom text: "Akses Semua Layanan Dalam Satu Portal" (Positioned safely above bottom bevel)
         cctx.save();
         cctx.fillStyle = '#a0a5db';
-        cctx.font = '500 28px -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif';
+        cctx.font = '600 27px -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif';
         cctx.textAlign = 'right';
         cctx.textBaseline = 'middle';
-        cctx.fillText('Akses Semua Layanan Dalam Satu Portal', 944, 986);
+        cctx.fillText('Akses Semua Layanan Dalam Satu Portal', 938, 936);
         cctx.restore();
     }
 
@@ -264,9 +264,9 @@
     deviceGroup.add(chassisMesh);
 
     // --- 2. 9 Raised 3D Calculator Keys / Buttons ---
-    const buttonSize = 2.45;
-    const buttonThickness = 0.45;
-    const buttonRadius = 0.42;
+    const buttonSize = 2.40;
+    const buttonThickness = 0.44;
+    const buttonRadius = 0.40;
     const buttonBevel = 0.12;
 
     const buttonShape = createRoundedRectShape(buttonSize, buttonSize, buttonRadius);
@@ -335,10 +335,10 @@
     }
 
     // Grid layout parameters
-    const spacing = 2.92;
-    const gridCenterY = 0.50; // centered in keypad well
-    const chassisFrontZ = chassisDepth / 2 + chassisBevel; // ~0.82
-    const buttonBaseZ = chassisFrontZ + buttonThickness / 2 + buttonBevel; // ~1.165
+    const spacing = 2.85;
+    const gridCenterY = 0.65; // centered in keypad well
+    const chassisFrontZ = chassisDepth / 2 + chassisBevel; // ~0.80
+    const buttonBaseZ = chassisFrontZ + buttonThickness / 2 + buttonBevel; // ~1.14
 
     const buttons = [];
 
@@ -400,7 +400,6 @@
     // Drag interaction tracking
     let isDragging = false;
     let previousPointer = { x: 0, y: 0 };
-    let pointerDownPos = { x: 0, y: 0 };
     let dragDistance = 0;
 
     function getNDC(clientX, clientY) {
@@ -416,7 +415,6 @@
     container.addEventListener('pointerdown', (e) => {
         isDragging = true;
         previousPointer = { x: e.clientX, y: e.clientY };
-        pointerDownPos = { x: e.clientX, y: e.clientY };
         dragDistance = 0;
         container.style.cursor = 'grabbing';
     });
@@ -436,8 +434,9 @@
             targetRotY += dx * 0.007;
             targetRotX += dy * 0.007;
 
-            // Clamp vertical pitch so device stays readable
-            targetRotX = Math.max(-Math.PI * 0.42, Math.min(Math.PI * 0.42, targetRotX));
+            // Safe rotation limits so device never clips the camera view
+            targetRotX = Math.max(-0.55, Math.min(0.55, targetRotX));
+            targetRotY = Math.max(-0.85, Math.min(0.85, targetRotY));
 
             previousPointer = { x: e.clientX, y: e.clientY };
         } else {
@@ -446,8 +445,8 @@
             if (rect.width > 0 && rect.height > 0) {
                 const cx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
                 const cy = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
-                hoverTiltY = cx * 0.08;
-                hoverTiltX = -cy * 0.06;
+                hoverTiltY = cx * 0.07;
+                hoverTiltX = -cy * 0.05;
             }
         }
     });
@@ -559,14 +558,19 @@
 
     animate();
 
-    // --- Responsive Resize ---
+    // --- Responsive Resize (Maintains generous padding across all viewports) ---
     function handleResize() {
         if (!container) return;
         const newWidth = container.clientWidth;
         const newHeight = container.clientHeight || newWidth;
         if (newWidth === 0 || newHeight === 0) return;
 
-        camera.aspect = newWidth / newHeight;
+        const newAspect = newWidth / newHeight;
+        camera.aspect = newAspect;
+
+        // Adaptive camera distance: scales back on narrower screens so it never cuts off
+        camera.position.z = newAspect < 1 ? baseCameraZ / newAspect : baseCameraZ;
+
         camera.updateProjectionMatrix();
         renderer.setSize(newWidth, newHeight);
     }
