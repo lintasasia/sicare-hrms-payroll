@@ -29,7 +29,7 @@ $totalEmployeesWithId = (int)$db->query("SELECT COUNT(*) FROM users WHERE employ
 // Ambil daftar karyawan dengan ID & status payroll terbaru di Karir
 $stmtEmployees = $db->query("
     SELECT 
-        u.id, u.employee_id, u.first_name, u.last_name, u.job_title, u.profile_picture, u.role,
+        u.id, u.employee_id, u.first_name, u.last_name, u.email, u.job_title, u.profile_picture, u.role,
         (SELECT ep.month_year FROM employee_payroll ep WHERE ep.user_id = u.id ORDER BY ep.created_at DESC LIMIT 1) AS last_period,
         (SELECT ep.status FROM employee_payroll ep WHERE ep.user_id = u.id ORDER BY ep.created_at DESC LIMIT 1) AS last_status,
         (SELECT ep.net_salary FROM employee_payroll ep WHERE ep.user_id = u.id ORDER BY ep.created_at DESC LIMIT 1) AS last_net_salary,
@@ -186,7 +186,10 @@ try {
                         <?php foreach ($employees as $emp): ?>
                             <?php
                                 $fullName = trim($emp['first_name'] . ' ' . ($emp['last_name'] ?? ''));
-                                $avatar = $emp['profile_picture'] ?: 'https://ui-avatars.com/api/?name=' . urlencode($fullName) . '&background=000666&color=fff';
+                                $emailHash = md5(strtolower(trim($emp['email'] ?? '')));
+                                $avatar = !empty($emp['profile_picture'])
+                                    ? $emp['profile_picture']
+                                    : "https://www.gravatar.com/avatar/{$emailHash}?d=identicon&s=120";
                                 $statusClass = 'bg-neutral-100 text-neutral-600';
                                 if ($emp['last_status'] === 'Paid') {
                                     $statusClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
@@ -199,7 +202,7 @@ try {
                             <tr class="hover:bg-neutral-50/80 transition emp-row" data-name="<?= strtolower($fullName) ?>" data-id="<?= strtolower($emp['employee_id']) ?>">
                                 <td class="py-3.5 px-5">
                                     <div class="flex items-center gap-3">
-                                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($fullName) ?>" class="w-9 h-9 rounded-full object-cover border border-outline-variant/20 shadow-xs" />
+                                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($fullName) ?>" class="w-9 h-9 rounded-full object-cover border border-outline-variant/20 shadow-xs" onerror="window.handleAvatarError(this, '<?= $emailHash ?>')" />
                                         <div>
                                             <div class="font-bold text-on-surface text-sm"><?= htmlspecialchars($fullName) ?></div>
                                             <div class="text-[11px] text-on-surface-variant"><?= htmlspecialchars($emp['job_title'] ?: 'Karyawan') ?></div>
