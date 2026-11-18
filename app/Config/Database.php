@@ -26,6 +26,16 @@ class Database {
         try {
             $this->pdo = new PDO($dsn, $user, $pass, $options);
         } catch (PDOException $e) {
+            // Auto fallback to local socket if TCP fails (e.g. CLI or sandbox mode)
+            if (file_exists('/tmp/mysql.sock')) {
+                try {
+                    $this->pdo = new PDO("mysql:unix_socket=/tmp/mysql.sock;dbname=$db;charset=utf8mb4", $user, $pass, $options);
+                    return;
+                } catch (PDOException $sockErr) {
+                    // Fall through to error handler
+                }
+            }
+
             // Check if request is AJAX or expects JSON
             $isJson = (isset($_SERVER['HTTP_ACCEPT']) && strpos(strtolower($_SERVER['HTTP_ACCEPT']), 'application/json') !== false);
             $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') || $isJson;
@@ -73,7 +83,7 @@ class Database {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Gangguan Database | siCare</title>
             <!-- Fonts & Icons -->
-            <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@800&display=swap" rel="stylesheet"/>
             <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
             <!-- Tailwind CDN -->
             <script src="https://cdn.tailwindcss.com"></script>
@@ -94,10 +104,10 @@ class Database {
             </script>
             <style>
                 body {
-                    font-family: 'Ubuntu', sans-serif;
+                    font-family: 'Inter', sans-serif;
                 }
                 h1, h2 {
-                    font-family: 'Ubuntu', sans-serif;
+                    font-family: 'Manrope', sans-serif;
                 }
             </style>
         </head>

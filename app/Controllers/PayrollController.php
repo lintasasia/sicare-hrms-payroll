@@ -10,14 +10,14 @@ class PayrollController {
 
     private $db;
 
-    public function __construct(PDO $db) {
-        $this->db = $db;
+    public function __construct() {
+        $this->db = Database::getInstance()->getConnection();
     }
 
     /**
      * Check if user is logged in and has HR Ops, Superadmin, or Admin role.
      */
-    private function checkAccess(bool $requireCsrf = false) {
+    private function checkAccess() {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
@@ -33,14 +33,6 @@ class PayrollController {
             http_response_code(403);
             echo json_encode(['success' => false, 'message' => 'Akses ditolak. Otoritas manajemen diperlukan.']);
             exit;
-        }
-        if ($requireCsrf) {
-            $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-            if (empty($token) || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
-                header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'message' => 'Token CSRF tidak valid atau kedaluwarsa. Silakan muat ulang halaman.']);
-                exit;
-            }
         }
     }
 
@@ -380,7 +372,7 @@ class PayrollController {
      * POST /hrops/payroll/generate
      */
     public function generate() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $monthYear = $_POST['month_year'] ?? '';
@@ -394,7 +386,7 @@ class PayrollController {
             $stmtUsers = $this->db->query("
                 SELECT id, base_salary 
                 FROM users 
-                WHERE role = 'employee' AND is_deleted = 0
+                WHERE role = 'employee'
             ");
             $employees = $stmtUsers->fetchAll(PDO::FETCH_ASSOC);
 
@@ -547,7 +539,7 @@ class PayrollController {
      * POST /hrops/payroll/update-bonus
      */
     public function updateBonus() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $payrollId = $_POST['id'] ?? '';
@@ -630,7 +622,7 @@ class PayrollController {
      * POST /hrops/payroll/update-status
      */
     public function updateStatus() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $ids = $_POST['ids'] ?? [];
@@ -688,7 +680,7 @@ class PayrollController {
      * POST /hrops/payroll/delete
      */
     public function delete() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $payrollId = $_POST['id'] ?? '';
@@ -733,7 +725,7 @@ class PayrollController {
      * POST /hrops/payroll/update-overtime
      */
     public function updateOvertime() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $payrollId = $_POST['id'] ?? '';
@@ -816,7 +808,7 @@ class PayrollController {
      * POST /hrops/payroll/update-other-deduction
      */
     public function updateOtherDeduction() {
-        $this->checkAccess(true);
+        $this->checkAccess();
         header('Content-Type: application/json');
 
         $payrollId = $_POST['id'] ?? '';
@@ -892,6 +884,145 @@ class PayrollController {
                 $this->db->rollBack();
             }
             echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan basis data: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * POST /hrops/payroll/sync-finance — Sinkronisasi data payroll dari Finance ERP ke Karir.
+     */
+    public function syncFinance() {
+        header('Content-Type: application/json');
+        $this->checkAccess();
+
+        try {
+            $financeApi = new \App\Services\FinanceApiService();
+            $verify = $financeApi->verifyConnection();
+            if (!$verify) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Gagal terhubung ke Finance ERP. Pastikan Base URL dan API Key di Pengaturan sudah valid.'
+                ]);
+                return;
+            }
+
+            // Ambil seluruh karyawan aktif yang memiliki employee_id
+            $usersStmt = $this->db->query("
+                SELECT id, employee_id, first_name, last_name, role 
+                FROM users 
+                WHERE employee_id IS NOT NULL AND employee_id != ''
+            ");
+            $users = $usersStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $syncedCount = 0;
+            $updatedEmployees = [];
+
+            foreach ($users as $u) {
+                $empId = trim($u['employee_id']);
+                $res = $financeApi->getEmployeePayrolls($empId);
+                if (!$res || empty($res['payrolls'])) {
+                    continue;
+                }
+
+                foreach ($res['payrolls'] as $rp) {
+                    $bulan = (int)($rp['periode']['bulan'] ?? 0);
+                    $tahun = (int)($rp['periode']['tahun'] ?? 0);
+                    if ($bulan < 1 || $tahun < 2000) continue;
+
+                    $monthYear = sprintf('%02d-%04d', $bulan, $tahun);
+                    $status = (($rp['status_bayar'] ?? '') === 'SUDAH_DIBAYAR' || !empty($rp['is_paid'])) ? 'Paid' : 'Approved';
+                    $paymentDate = !empty($rp['tanggal_bayar']) ? ($rp['tanggal_bayar'] . ' 00:00:00') : null;
+
+                    $baseSalary = (float)($rp['penghasilan']['gaji_pokok'] ?? 0);
+                    $tunjJabatan = (float)($rp['penghasilan']['tunjangan'] ?? 0);
+                    $tunjTransportMakan = (float)(($rp['penghasilan']['uang_transport'] ?? 0) + ($rp['penghasilan']['uang_makan'] ?? 0));
+                    $bonus = (float)($rp['penghasilan']['bonus'] ?? 0);
+                    $reimbursement = (float)($rp['penghasilan']['lain_lain'] ?? 0);
+                    $bpjsTk = (float)($rp['potongan']['bpjs_ketenagakerjaan'] ?? 0);
+                    $bpjsKes = (float)($rp['potongan']['bpjs_kesehatan'] ?? 0);
+                    $pph21 = (float)($rp['potongan']['pph21'] ?? 0);
+                    $netSalary = (float)($rp['take_home_pay'] ?? 0);
+
+                    // Cek apakah data payroll untuk user & periode ini sudah ada
+                    $checkStmt = $this->db->prepare("SELECT id FROM employee_payroll WHERE user_id = :uid AND month_year = :my");
+                    $checkStmt->execute(['uid' => $u['id'], 'my' => $monthYear]);
+                    $existingId = $checkStmt->fetchColumn();
+
+                    if ($existingId) {
+                        // UPDATE data tanpa menghapus record lain
+                        $updateStmt = $this->db->prepare("
+                            UPDATE employee_payroll 
+                            SET base_salary = :base_salary,
+                                tunj_jabatan = :tunj_jabatan,
+                                tunj_transport_makan = :tunj_transport_makan,
+                                bonus = :bonus,
+                                reimbursement = :reimbursement,
+                                bpjs_tk = :bpjs_tk,
+                                bpjs_kes = :bpjs_kes,
+                                pph21 = :pph21,
+                                net_salary = :net_salary,
+                                status = :status,
+                                payment_date = :payment_date,
+                                updated_at = NOW()
+                            WHERE id = :id
+                        ");
+                        $updateStmt->execute([
+                            'id' => $existingId,
+                            'base_salary' => $baseSalary,
+                            'tunj_jabatan' => $tunjJabatan,
+                            'tunj_transport_makan' => $tunjTransportMakan,
+                            'bonus' => $bonus,
+                            'reimbursement' => $reimbursement,
+                            'bpjs_tk' => $bpjsTk,
+                            'bpjs_kes' => $bpjsKes,
+                            'pph21' => $pph21,
+                            'net_salary' => $netSalary,
+                            'status' => $status,
+                            'payment_date' => $paymentDate,
+                        ]);
+                    } else {
+                        // INSERT record baru dengan UUID
+                        $insertStmt = $this->db->prepare("
+                            INSERT INTO employee_payroll (
+                                id, user_id, month_year, base_salary, tunj_jabatan,
+                                tunj_transport_makan, tunj_komunikasi, bonus, reimbursement,
+                                overtime, bpjs_tk, bpjs_kes, pph21, other_deduction,
+                                net_salary, status, payment_date, created_at, updated_at
+                            ) VALUES (
+                                UUID(), :uid, :my, :base_salary, :tunj_jabatan,
+                                :tunj_transport_makan, 0.00, :bonus, :reimbursement,
+                                0.00, :bpjs_tk, :bpjs_kes, :pph21, 0.00,
+                                :net_salary, :status, :payment_date, NOW(), NOW()
+                            )
+                        ");
+                        $insertStmt->execute([
+                            'uid' => $u['id'],
+                            'my' => $monthYear,
+                            'base_salary' => $baseSalary,
+                            'tunj_jabatan' => $tunjJabatan,
+                            'tunj_transport_makan' => $tunjTransportMakan,
+                            'bonus' => $bonus,
+                            'reimbursement' => $reimbursement,
+                            'bpjs_tk' => $bpjsTk,
+                            'bpjs_kes' => $bpjsKes,
+                            'pph21' => $pph21,
+                            'net_salary' => $netSalary,
+                            'status' => $status,
+                            'payment_date' => $paymentDate,
+                        ]);
+                    }
+                    $syncedCount++;
+                    $updatedEmployees[$u['id']] = trim($u['first_name'] . ' ' . ($u['last_name'] ?? ''));
+                }
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => "Sinkronisasi berhasil! {$syncedCount} data payroll dari Finance ERP telah disinkronkan ke database Karir tanpa mengubah data historis lainnya.",
+                'synced_count' => $syncedCount,
+                'employees_count' => count($updatedEmployees),
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Gagal sinkronisasi: ' . $e->getMessage()]);
         }
     }
 }

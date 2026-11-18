@@ -2,23 +2,31 @@
 // HR Operations — Pemrosesan Penggajian (Payroll Portal)
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-use App\Services\ViewHelper;
-
-$companyName = ViewHelper::getSetting('app_company_name', 'PT SI CARE ENTERPRISE');
+$db = \App\Config\Database::getInstance()->getConnection();
+$companyName = $db->query("SELECT `value` FROM global_settings WHERE `key` = 'app_company_name' LIMIT 1")->fetchColumn() ?: 'PT SI CARE ENTERPRISE';
 $companyNameForStamp = $companyName;
 if (stripos($companyName, 'Mango') !== false) {
     $companyNameForStamp = 'PT. MANGO TEKNUSA INOVASI';
 }
-$appName      = ViewHelper::getSetting('app_name', 'siCare');
-$appLogoIcon  = ViewHelper::getSetting('app_logo_icon', 'local_police');
-$appLogoType  = ViewHelper::getSetting('app_logo_type', 'icon');
-$appLogoImage = ViewHelper::getSetting('app_logo_image', '');
+$appName = $db->query("SELECT `value` FROM global_settings WHERE `key` = 'app_name' LIMIT 1")->fetchColumn() ?: 'siCare';
+$appLogoIcon = $db->query("SELECT `value` FROM global_settings WHERE `key` = 'app_logo_icon' LIMIT 1")->fetchColumn() ?: 'local_police';
+$appLogoType = $db->query("SELECT `value` FROM global_settings WHERE `key` = 'app_logo_type' LIMIT 1")->fetchColumn() ?: 'icon';
+$appLogoImage = $db->query("SELECT `value` FROM global_settings WHERE `key` = 'app_logo_image' LIMIT 1")->fetchColumn() ?: '';
+$bpjsTkPct = (float)($db->query("SELECT `value` FROM global_settings WHERE `key` = 'payroll_bpjs_tk_pct' LIMIT 1")->fetchColumn() ?: 2);
+$bpjsKesPct = (float)($db->query("SELECT `value` FROM global_settings WHERE `key` = 'payroll_bpjs_kes_pct' LIMIT 1")->fetchColumn() ?: 1);
+$pph21Pct = (float)($db->query("SELECT `value` FROM global_settings WHERE `key` = 'payroll_pph21_pct' LIMIT 1")->fetchColumn() ?: 2.5);
 
-$bpjsTkPct  = (float)ViewHelper::getSetting('payroll_bpjs_tk_pct', 2);
-$bpjsKesPct = (float)ViewHelper::getSetting('payroll_bpjs_kes_pct', 1);
-$pph21Pct   = (float)ViewHelper::getSetting('payroll_pph21_pct', 2.5);
-
-[$hrDirectorName, $hrDirectorTitle] = ViewHelper::getHrDirectorData();
+// Fetch HR Director (Hiring Manager of HR department) dynamically, fallback to Zanuba Arifatul Khafsoh
+$hrQuery = $db->query("
+    SELECT u.first_name, u.last_name, u.job_title 
+    FROM users u
+    JOIN departments d ON u.department_id = d.id
+    WHERE u.role = 'hiring_manager' AND (d.name LIKE '%Human Resources%' OR d.name LIKE '%HR%')
+    LIMIT 1
+");
+$hrDirectorData = $hrQuery->fetch();
+$hrDirectorName = $hrDirectorData ? trim($hrDirectorData['first_name'] . ' ' . ($hrDirectorData['last_name'] ?? '')) : 'Zanuba Arifatul Khafsoh';
+$hrDirectorTitle = $hrDirectorData ? ($hrDirectorData['job_title'] ?? 'HR Operations Director') : 'HR Operations Director';
 ?>
 <style>
     .kpi-card {
@@ -139,6 +147,10 @@ $pph21Pct   = (float)ViewHelper::getSetting('payroll_pph21_pct', 2.5);
             <p class="text-on-surface-variant font-medium text-sm">Kelola draf payroll karyawan, adjust bonus, verifikasi reimbursement, dan proses pembayaran gaji.</p>
         </div>
         <div class="flex items-center gap-3">
+            <a href="/hrops/finance-sync" data-spa class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-surface-container-lowest border border-primary/20 text-primary hover:bg-primary/5 rounded-xl text-xs font-bold transition-all shadow-sm">
+                <span class="material-symbols-outlined text-sm">sync_alt</span>
+                Sinkronisasi Finance
+            </a>
             <div class="relative">
                 <input type="month" id="payrollMonth" value="<?= date('Y-m') ?>"
                     class="bg-surface-container-lowest border border-outline-variant/30 text-on-surface text-sm rounded-xl pl-4 pr-10 py-2.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-semibold"

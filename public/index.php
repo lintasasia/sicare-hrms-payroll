@@ -413,6 +413,9 @@ if ($method === 'POST' && $path === 'auth/login') {
 } elseif ($method === 'POST' && $path === 'hrops/payroll/delete') {
     (new \App\Controllers\PayrollController())->delete();
     exit;
+} elseif ($method === 'POST' && in_array($path, ['hrops/payroll/sync-finance', 'admin/payroll/sync-finance', 'superadmin/payroll/sync-finance'])) {
+    (new \App\Controllers\PayrollController())->syncFinance();
+    exit;
 } elseif ($method === 'POST' && $path === 'admin/departments/save') {
     (new \App\Controllers\DepartmentController())->save();
     exit;
