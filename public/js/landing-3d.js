@@ -103,8 +103,8 @@
     const aspect = width / height;
 
     const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 100);
-    // Camera positioned with generous breathing room so model is NEVER cut off
-    const baseCameraZ = 24.5;
+    // Camera positioned so model is large & bold like original, with safe margins so it doesn't cut off
+    const baseCameraZ = 20.2;
     camera.position.set(0, 0, aspect < 1 ? baseCameraZ / aspect : baseCameraZ);
     camera.lookAt(0, 0, 0);
 
@@ -434,9 +434,9 @@
             targetRotY += dx * 0.007;
             targetRotX += dy * 0.007;
 
-            // Safe rotation limits so device never clips the camera view
-            targetRotX = Math.max(-0.55, Math.min(0.55, targetRotX));
-            targetRotY = Math.max(-0.85, Math.min(0.85, targetRotY));
+            // Safe rotation limits so device stays well framed without clipping
+            targetRotX = Math.max(-0.45, Math.min(0.45, targetRotX));
+            targetRotY = Math.max(-0.75, Math.min(0.75, targetRotY));
 
             previousPointer = { x: e.clientX, y: e.clientY };
         } else {

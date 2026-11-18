@@ -32,7 +32,7 @@
         </div>
         <div class="flex-1 relative pl-0 md:pl-6 flex items-center justify-center">
             <!-- 3D Interactive Calculator Device Canvas -->
-            <div id="sicare-3d-container" class="w-full aspect-square max-w-[560px] relative z-0 min-h-[420px] md:min-h-[500px]"></div>
+            <div id="sicare-3d-container" class="w-full aspect-square max-w-[580px] relative z-0 min-h-[460px] md:min-h-[540px]"></div>
             
             <!-- Identity Chip Overlapping - Floating Animation (Exact design from original UI) -->
             <div class="absolute -bottom-6 left-0 md:left-4 p-5 bg-white rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.15)] border border-gray-100 flex items-center gap-4 animate-float z-10 w-[280px]">
