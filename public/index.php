@@ -416,6 +416,9 @@ if ($method === 'POST' && $path === 'auth/login') {
 } elseif ($method === 'POST' && in_array($path, ['hrops/payroll/sync-finance', 'admin/payroll/sync-finance', 'superadmin/payroll/sync-finance'])) {
     (new \App\Controllers\PayrollController())->syncFinance();
     exit;
+} elseif ($method === 'POST' && in_array($path, ['api/v1/webhook/payroll-payment', 'api/v1/finance/push-slip'])) {
+    (new \App\Controllers\PayrollController())->receiveFinanceWebhook();
+    exit;
 } elseif ($method === 'POST' && $path === 'admin/departments/save') {
     (new \App\Controllers\DepartmentController())->save();
     exit;

@@ -1025,4 +1025,178 @@ class PayrollController {
             echo json_encode(['success' => false, 'message' => 'Gagal sinkronisasi: ' . $e->getMessage()]);
         }
     }
+
+    /**
+     * POST /api/v1/webhook/payroll-payment — Webhook masuk langsung dari Finance ERP saat tombol Bayar/Cetak/Proses ditekan.
+     */
+    public function receiveFinanceWebhook() {
+        header('Content-Type: application/json; charset=utf-8');
+
+        // 1. Ambil API Key dari header
+        $providedKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
+        if (empty($providedKey) && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            if (preg_match('/Bearer\s+(.+)$/i', $_SERVER['HTTP_AUTHORIZATION'], $matches)) {
+                $providedKey = trim($matches[1]);
+            }
+        }
+
+        // Ambil secret API Key yang valid dari database
+        $expectedKey = $this->db->query("SELECT `value` FROM global_settings WHERE `key` = 'finance_api_key' LIMIT 1")->fetchColumn() ?: '';
+        if (empty($expectedKey) && !empty($_ENV['FINANCE_API_KEY'])) {
+            $expectedKey = $_ENV['FINANCE_API_KEY'];
+        }
+
+        if (empty($providedKey) || empty($expectedKey) || !hash_equals($expectedKey, $providedKey)) {
+            http_response_code(401);
+            echo json_encode(['success' => false, 'message' => 'Unauthorized: API Key tidak valid atau belum dikonfigurasi.']);
+            return;
+        }
+
+        // 2. Baca payload JSON
+        $rawInput = file_get_contents('php://input');
+        $payload = json_decode($rawInput, true);
+        if (!is_array($payload)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Invalid JSON payload.']);
+            return;
+        }
+
+        $noKaryawan = trim($payload['no_karyawan'] ?? $payload['employee_id'] ?? '');
+        $karyawanNama = trim($payload['karyawan_nama'] ?? $payload['nama'] ?? '');
+        $bulan = (int)($payload['periode_bulan'] ?? $payload['bulan'] ?? 0);
+        $tahun = (int)($payload['periode_tahun'] ?? $payload['tahun'] ?? 0);
+
+        if (empty($bulan) || empty($tahun) || (empty($noKaryawan) && empty($karyawanNama))) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'Field no_karyawan/karyawan_nama, periode_bulan, dan periode_tahun wajib diisi.']);
+            return;
+        }
+
+        // 3. Cari karyawan di tabel users
+        $user = null;
+        if (!empty($noKaryawan)) {
+            $stmt = $this->db->prepare("SELECT id, first_name, last_name, employee_id FROM users WHERE employee_id = :nik LIMIT 1");
+            $stmt->execute(['nik' => $noKaryawan]);
+            $user = $stmt->fetch(\PDO::FETCH_ASSOC);
+        }
+        if (!$user && !empty($karyawanNama)) {
+            $stmt = $this->db->prepare("
+                SELECT id, first_name, last_name, employee_id 
+                FROM users 
+                WHERE LOWER(TRIM(CONCAT(first_name, ' ', COALESCE(last_name, '')))) = LOWER(TRIM(:nama))
+                   OR LOWER(TRIM(first_name)) = LOWER(TRIM(:nama))
+                LIMIT 1
+            ");
+            $stmt->execute(['nama' => $karyawanNama]);
+            $user = $stmt->fetch(\PDO::FETCH_ASSOC);
+        }
+
+        if (!$user) {
+            http_response_code(404);
+            echo json_encode([
+                'success' => false,
+                'message' => "Karyawan '{$noKaryawan}' / '{$karyawanNama}' tidak ditemukan dalam database siCare."
+            ]);
+            return;
+        }
+
+        $monthYear = sprintf('%02d-%04d', $bulan, $tahun);
+        $statusBayar = strtoupper(trim($payload['status_bayar'] ?? 'SUDAH_DIBAYAR'));
+        $status = ($statusBayar === 'SUDAH_DIBAYAR' || !empty($payload['is_paid'])) ? 'Paid' : 'Approved';
+        
+        $tanggalBayar = $payload['tanggal_bayar'] ?? date('Y-m-d');
+        $paymentDate = !empty($tanggalBayar) ? ($tanggalBayar . (strlen($tanggalBayar) === 10 ? ' 00:00:00' : '')) : date('Y-m-d H:i:s');
+
+        $baseSalary = (float)($payload['gaji_pokok'] ?? 0);
+        $tunjJabatan = (float)($payload['tunjangan'] ?? 0);
+        $tunjTransportMakan = (float)(($payload['uang_transport'] ?? 0) + ($payload['uang_makan'] ?? 0));
+        $bonus = (float)($payload['bonus'] ?? 0);
+        $reimbursement = (float)($payload['lain_lain'] ?? 0);
+        $bpjsTk = (float)($payload['bpjs_ketenagakerjaan'] ?? 0);
+        $bpjsKes = (float)($payload['bpjs_kesehatan'] ?? 0);
+        $pph21 = (float)($payload['pph21'] ?? 0);
+        $netSalary = (float)($payload['take_home_pay'] ?? $payload['gaji_bersih'] ?? 0);
+
+        // 4. Non-destructive Upsert
+        $checkStmt = $this->db->prepare("SELECT id FROM employee_payroll WHERE user_id = :uid AND month_year = :my");
+        $checkStmt->execute(['uid' => $user['id'], 'my' => $monthYear]);
+        $existingId = $checkStmt->fetchColumn();
+
+        if ($existingId) {
+            $updateStmt = $this->db->prepare("
+                UPDATE employee_payroll 
+                SET base_salary = :base_salary,
+                    tunj_jabatan = :tunj_jabatan,
+                    tunj_transport_makan = :tunj_transport_makan,
+                    bonus = :bonus,
+                    reimbursement = :reimbursement,
+                    bpjs_tk = :bpjs_tk,
+                    bpjs_kes = :bpjs_kes,
+                    pph21 = :pph21,
+                    net_salary = :net_salary,
+                    status = :status,
+                    payment_date = :payment_date,
+                    updated_at = NOW()
+                WHERE id = :id
+            ");
+            $updateStmt->execute([
+                'id' => $existingId,
+                'base_salary' => $baseSalary,
+                'tunj_jabatan' => $tunjJabatan,
+                'tunj_transport_makan' => $tunjTransportMakan,
+                'bonus' => $bonus,
+                'reimbursement' => $reimbursement,
+                'bpjs_tk' => $bpjsTk,
+                'bpjs_kes' => $bpjsKes,
+                'pph21' => $pph21,
+                'net_salary' => $netSalary,
+                'status' => $status,
+                'payment_date' => $paymentDate,
+            ]);
+            $action = 'updated';
+            $payrollRecordId = $existingId;
+        } else {
+            $insertStmt = $this->db->prepare("
+                INSERT INTO employee_payroll (
+                    id, user_id, month_year, base_salary, tunj_jabatan,
+                    tunj_transport_makan, tunj_komunikasi, bonus, reimbursement,
+                    overtime, bpjs_tk, bpjs_kes, pph21, other_deduction,
+                    net_salary, status, payment_date, created_at, updated_at
+                ) VALUES (
+                    UUID(), :uid, :my, :base_salary, :tunj_jabatan,
+                    :tunj_transport_makan, 0.00, :bonus, :reimbursement,
+                    0.00, :bpjs_tk, :bpjs_kes, :pph21, 0.00,
+                    :net_salary, :status, :payment_date, NOW(), NOW()
+                )
+            ");
+            $insertStmt->execute([
+                'uid' => $user['id'],
+                'my' => $monthYear,
+                'base_salary' => $baseSalary,
+                'tunj_jabatan' => $tunjJabatan,
+                'tunj_transport_makan' => $tunjTransportMakan,
+                'bonus' => $bonus,
+                'reimbursement' => $reimbursement,
+                'bpjs_tk' => $bpjsTk,
+                'bpjs_kes' => $bpjsKes,
+                'pph21' => $pph21,
+                'net_salary' => $netSalary,
+                'status' => $status,
+                'payment_date' => $paymentDate,
+            ]);
+            $action = 'created';
+            $payrollRecordId = $this->db->query("SELECT id FROM employee_payroll WHERE user_id = '{$user['id']}' AND month_year = '{$monthYear}'")->fetchColumn();
+        }
+
+        echo json_encode([
+            'success' => true,
+            'action' => $action,
+            'message' => "Slip gaji karyawan {$user['first_name']} ({$monthYear}) sebesar Rp " . number_format($netSalary, 0, ',', '.') . " berhasil disinkronkan ke siCare HRMS.",
+            'payroll_id' => $payrollRecordId,
+            'employee_id' => $user['employee_id'],
+            'month_year' => $monthYear,
+            'net_salary' => $netSalary,
+            'status' => $status,
+        ]);
+    }
 }
