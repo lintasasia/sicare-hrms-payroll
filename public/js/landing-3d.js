@@ -2,13 +2,13 @@
  * siCare - 3D Interactive Calculator Device with Beveled Keys
  * Built with Three.js (r128 / r186 compatible) following Three.js Cloud Skills guidelines.
  * Features:
- * - 3D Calculator Chassis / Body: Chunky rounded beveled casing in dark navy (#0c145e)
- * - Inset Keypad Tray with subtle depth & specular sheen
- * - 9 Raised 3D Mechanical Calculator Keys with original rich corporate colors
- * - Crisp centered 2D Material Symbols icons with dynamic font loading
- * - Direct contact shadows from keys onto chassis & soft ground shadow
- * - Interactive spring push click, hover lift, staggered wave breathing, and 3D parallax tilt
- * - "Akses Semua Layanan Dalam Satu Portal" etched on chassis face
+ * - Default view: TEGAP (straight front-facing, upright, non-tilted) exactly like the 2D UI.
+ * - Colors: 100% identical to the original deep navy & rich corporate palette (#0c145e, #23459c, etc.).
+ * - Fully Interactive 3D Rotation: User can click & drag (or touch drag) to rotate in all directions in 3D!
+ * - Interactive hover parallax tilt when hovering with mouse.
+ * - Double-click / tap to smoothly reset orientation back to tegap (0, 0).
+ * - 9 Raised 3D Mechanical Calculator Keys with spring push click, hover lift, and idle wave.
+ * - "Akses Semua Layanan Dalam Satu Portal" etched on the chassis face.
  */
 
 (function () {
@@ -78,20 +78,20 @@
         };
     }
 
-    // --- Grid Items Specification (9 Calculator Keys) ---
+    // --- Exact Original Palette & Items (Exact 2D match) ---
     const gridItems = [
         // Row 0
-        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#243b91', label: 'Lowongan Kerja' },
-        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#3e2f6b', label: 'Kartu Pegawai' },
-        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#322c7a', label: 'Struktur Tim' },
+        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#23459c', label: 'Lowongan Kerja' },
+        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#3d316e', label: 'Kartu Pegawai' },
+        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#322d7d', label: 'Struktur Tim' },
         // Row 1
-        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#1f4277', label: 'Tugas & Cuti' },
-        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#423d61', label: 'Operasional' },
-        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\ue7e7', color: '#1e4682', label: 'Departemen' },
+        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#20437d', label: 'Tugas & Cuti' },
+        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#443d63', label: 'Operasional' },
+        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\ue7e7', color: '#1d4686', label: 'Departemen' },
         // Row 2
-        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#3c2a6d', label: 'Presensi ESS' },
+        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#3d2b6e', label: 'Presensi ESS' },
         { row: 2, col: 1, icon: 'leaderboard', unicode: '\uf20c', color: '#1c3f87', label: 'KPI & Laporan' },
-        { row: 2, col: 2, icon: 'handshake', unicode: '\uebc5', color: '#433660', label: 'Onboarding' }
+        { row: 2, col: 2, icon: 'handshake', unicode: '\uebc5', color: '#423561', label: 'Onboarding' }
     ];
 
     // --- Scene, Camera, Renderer ---
@@ -101,8 +101,8 @@
     const height = container.clientHeight || 500;
 
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    // Camera positioned with pleasant isometric viewing distance
-    camera.position.set(0, 0, 22.5);
+    // Camera positioned straight in front for clean, tegap view
+    camera.position.set(0, 0, 18.6);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({
@@ -114,8 +114,9 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+
+    // Use NoToneMapping so exact hex colors (#0c145e, #23459c, etc.) render at true RGB values
+    renderer.toneMapping = THREE.NoToneMapping;
 
     if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) {
         renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -126,40 +127,35 @@
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // --- Master Device Group (Everything tilts together like a physical calculator) ---
+    // --- Master Device Group (Holds chassis + keys; fully rotatable in 3D) ---
     const deviceGroup = new THREE.Group();
     scene.add(deviceGroup);
 
-    // Default isometric tilt so the thick 3D bevels and sides are clearly prominent
-    const baseRotX = 0.28;   // pitch downward towards viewer
-    const baseRotY = -0.26;  // yaw left so right and top side walls are visible
-    const baseRotZ = 0.02;
-    deviceGroup.rotation.set(baseRotX, baseRotY, baseRotZ);
+    // Default view: TEGAP (straight, 0 rotation, exactly like the 2D layout)
+    deviceGroup.rotation.set(0, 0, 0);
 
-    // --- Lighting: Key light for bevel highlights + soft fill & ambient ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    // --- Lighting: Balanced to preserve 100% color accuracy while giving 3D bevels ---
+    // Pure white ambient light keeps front face colors solid and rich
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.98);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x111638, 0.85);
-    scene.add(hemiLight);
-
-    // Key directional light (casts crisp soft shadows from keys onto chassis & chassis onto floor)
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
-    keyLight.position.set(14, 18, 20);
+    // Key directional light for bevel specular highlights and soft drop shadows
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    keyLight.position.set(12, 16, 18);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0003;
     keyLight.shadow.camera.near = 5;
-    keyLight.shadow.camera.far = 50;
-    keyLight.shadow.camera.left = -10;
-    keyLight.shadow.camera.right = 10;
-    keyLight.shadow.camera.top = 10;
-    keyLight.shadow.camera.bottom = -10;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -9;
+    keyLight.shadow.camera.right = 9;
+    keyLight.shadow.camera.top = 9;
+    keyLight.shadow.camera.bottom = -9;
     scene.add(keyLight);
 
-    // Rim light from bottom-left for edge delineation
-    const rimLight = new THREE.DirectionalLight(0x7c8cf8, 0.7);
+    // Subtle blue rim light from bottom left to delineate 3D edges
+    const rimLight = new THREE.DirectionalLight(0x243b91, 0.5);
     rimLight.position.set(-14, -10, 10);
     scene.add(rimLight);
 
@@ -171,8 +167,8 @@
         const sctx = shadowCanvas.getContext('2d');
 
         const grad = sctx.createRadialGradient(128, 128, 10, 128, 128, 120);
-        grad.addColorStop(0, 'rgba(12, 20, 94, 0.45)');
-        grad.addColorStop(0.5, 'rgba(8, 12, 60, 0.25)');
+        grad.addColorStop(0, 'rgba(8, 12, 60, 0.40)');
+        grad.addColorStop(0.6, 'rgba(12, 20, 94, 0.18)');
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         sctx.fillStyle = grad;
         sctx.fillRect(0, 0, 256, 256);
@@ -182,25 +178,25 @@
             map: shadowTex,
             transparent: true,
             depthWrite: false,
-            opacity: 0.85
+            opacity: 0.75
         });
-        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 17), shadowMat);
-        shadowMesh.position.set(0.6, -0.6, -1.2);
+        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 16.5), shadowMat);
+        shadowMesh.position.set(0, -0.2, -1.2);
         deviceGroup.add(shadowMesh);
     })();
 
     // --- 1. 3D Calculator Chassis / Body ---
     const chassisWidth = 11.4;
-    const chassisHeight = 12.0;
-    const chassisRadius = 1.5;
+    const chassisHeight = 11.8;
+    const chassisRadius = 1.45;
     const chassisDepth = 1.0;
-    const chassisBevel = 0.35;
+    const chassisBevel = 0.32;
 
     const chassisShape = createRoundedRectShape(chassisWidth, chassisHeight, chassisRadius);
     const chassisGeo = new THREE.ExtrudeGeometry(chassisShape, {
         depth: chassisDepth,
         bevelEnabled: true,
-        bevelSegments: 7,
+        bevelSegments: 6,
         steps: 1,
         bevelSize: chassisBevel,
         bevelThickness: chassisBevel,
@@ -211,61 +207,38 @@
     });
     chassisGeo.center();
 
-    // Chassis Front Texture (Keypad recessed tray, branding & bottom label)
+    // Chassis Front Texture (Exact #0c145e dark navy, recessed tray & bottom text)
     const chassisCanvas = document.createElement('canvas');
     chassisCanvas.width = 1024;
-    chassisCanvas.height = 1078; // proportional to 11.4 x 12.0
+    chassisCanvas.height = 1060;
     const cctx = chassisCanvas.getContext('2d');
 
     function renderChassisCanvas() {
-        cctx.clearRect(0, 0, 1024, 1078);
+        cctx.clearRect(0, 0, 1024, 1060);
 
-        // Solid rich dark navy body
+        // Exact dark navy background matching original 2D container
         cctx.fillStyle = '#0c145e';
-        cctx.fillRect(0, 0, 1024, 1078);
+        cctx.fillRect(0, 0, 1024, 1060);
 
-        // Elegant lighting sheen from top
-        const sheen = cctx.createLinearGradient(0, 0, 0, 1078);
-        sheen.addColorStop(0, 'rgba(255, 255, 255, 0.09)');
-        sheen.addColorStop(0.35, 'rgba(255, 255, 255, 0.0)');
-        sheen.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
-        cctx.fillStyle = sheen;
-        cctx.fillRect(0, 0, 1024, 1078);
-
-        // Recessed keypad well / tray (where the 9 buttons sit)
+        // Inset keypad well where buttons sit
         cctx.save();
-        // Inner well shadow
-        cctx.fillStyle = '#090e44';
-        drawRoundRect(cctx, 58, 64, 908, 868, 48);
+        cctx.fillStyle = '#080d44';
+        drawRoundRect(cctx, 56, 56, 912, 860, 44);
         cctx.fill();
 
         // Well subtle inset border
-        cctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
-        cctx.lineWidth = 4;
+        cctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+        cctx.lineWidth = 3;
         cctx.stroke();
-
-        // Subtle gradient inside the well for realistic recessed depth
-        const wellGrad = cctx.createLinearGradient(0, 64, 0, 932);
-        wellGrad.addColorStop(0, 'rgba(0, 0, 0, 0.28)');
-        wellGrad.addColorStop(0.15, 'rgba(0, 0, 0, 0.0)');
-        wellGrad.addColorStop(1, 'rgba(255, 255, 255, 0.04)');
-        cctx.fillStyle = wellGrad;
-        drawRoundRect(cctx, 58, 64, 908, 868, 48);
-        cctx.fill();
         cctx.restore();
 
-        // Subtle top accent bar (calculator hardware detail)
-        cctx.fillStyle = 'rgba(160, 165, 219, 0.25)';
-        drawRoundRect(cctx, 84, 34, 52, 6, 3);
-        cctx.fill();
-
-        // Bottom text: "Akses Semua Layanan Dalam Satu Portal"
+        // Bottom text: "Akses Semua Layanan Dalam Satu Portal" (Exact match)
         cctx.save();
         cctx.fillStyle = '#a0a5db';
-        cctx.font = '600 28px -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif';
+        cctx.font = '500 28px -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif';
         cctx.textAlign = 'right';
         cctx.textBaseline = 'middle';
-        cctx.fillText('Akses Semua Layanan Dalam Satu Portal', 944, 996);
+        cctx.fillText('Akses Semua Layanan Dalam Satu Portal', 944, 986);
         cctx.restore();
     }
 
@@ -273,16 +246,16 @@
     const chassisTex = new THREE.CanvasTexture(chassisCanvas);
     chassisTex.anisotropy = 4;
 
+    // Chassis side & bevel material: PBR for 3D highlights when rotated
     const chassisSideMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color('#0c145e'),
         roughness: 0.35,
-        metalness: 0.14
+        metalness: 0.12
     });
 
-    const chassisFrontMat = new THREE.MeshStandardMaterial({
-        map: chassisTex,
-        roughness: 0.32,
-        metalness: 0.10
+    // Chassis front cap: MeshLambertMaterial so colors stay 100% solid & true to #0c145e
+    const chassisFrontMat = new THREE.MeshLambertMaterial({
+        map: chassisTex
     });
 
     const chassisMesh = new THREE.Mesh(chassisGeo, [chassisFrontMat, chassisSideMat]);
@@ -321,22 +294,14 @@
         function renderKey() {
             ctx.clearRect(0, 0, 512, 512);
 
-            // Button base color
+            // Exact solid button color
             ctx.fillStyle = hexColor;
             ctx.fillRect(0, 0, 512, 512);
 
-            // Subtle surface gradient sheen
-            const sheen = ctx.createLinearGradient(0, 0, 0, 512);
-            sheen.addColorStop(0, 'rgba(255, 255, 255, 0.14)');
-            sheen.addColorStop(0.45, 'rgba(255, 255, 255, 0.0)');
-            sheen.addColorStop(1, 'rgba(0, 0, 0, 0.18)');
-            ctx.fillStyle = sheen;
-            ctx.fillRect(0, 0, 512, 512);
-
             // Subtle inner key rim
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(5, 5, 502, 502);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, 504, 504);
 
             // Centered 2D White Material Symbols Icon
             ctx.save();
@@ -345,9 +310,9 @@
             ctx.textBaseline = 'middle';
 
             // Soft icon drop shadow
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.30)';
-            ctx.shadowBlur = 16;
-            ctx.shadowOffsetY = 6;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+            ctx.shadowBlur = 14;
+            ctx.shadowOffsetY = 4;
 
             ctx.font = 'normal 210px "Material Symbols Outlined", sans-serif';
             const glyph = unicodeGlyph || iconName;
@@ -371,27 +336,25 @@
 
     // Grid layout parameters
     const spacing = 2.92;
-    const gridCenterY = 0.52; // centered nicely inside the keypad well
-    const chassisFrontZ = chassisDepth / 2 + chassisBevel; // ~0.85
-    const buttonBaseZ = chassisFrontZ + buttonThickness / 2 + buttonBevel; // ~1.195
+    const gridCenterY = 0.50; // centered in keypad well
+    const chassisFrontZ = chassisDepth / 2 + chassisBevel; // ~0.82
+    const buttonBaseZ = chassisFrontZ + buttonThickness / 2 + buttonBevel; // ~1.165
 
     const buttons = [];
 
     gridItems.forEach((item) => {
         const topTexture = makeKeyTexture(item.icon, item.unicode, item.color);
 
-        // Sides and bevel material with specular sheen
+        // Sides and bevel material with specular sheen when rotated in 3D
         const sideMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(item.color),
             roughness: 0.30,
-            metalness: 0.16
+            metalness: 0.15
         });
 
-        // Top face material
-        const frontMat = new THREE.MeshStandardMaterial({
-            map: topTexture,
-            roughness: 0.28,
-            metalness: 0.08
+        // Top face material: MeshLambertMaterial preserves 100% exact original color
+        const frontMat = new THREE.MeshLambertMaterial({
+            map: topTexture
         });
 
         const keyMesh = new THREE.Mesh(buttonGeo, [frontMat, sideMat]);
@@ -420,62 +383,107 @@
         buttons.push(keyMesh);
     });
 
-    // --- Interactive Raycasting & Parallax Tilt ---
+    // --- Interactive 3D Rotation (Bisa Diputar-putar Bebas) & Raycasting ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2(-999, -999);
     let hoveredKey = null;
 
-    let targetTiltX = baseRotX;
-    let targetTiltY = baseRotY;
+    // Rotation angles
+    let rotX = 0;
+    let rotY = 0;
+    let targetRotX = 0;
+    let targetRotY = 0;
 
-    function updateMouse(clientX, clientY) {
+    let hoverTiltX = 0;
+    let hoverTiltY = 0;
+
+    // Drag interaction tracking
+    let isDragging = false;
+    let previousPointer = { x: 0, y: 0 };
+    let pointerDownPos = { x: 0, y: 0 };
+    let dragDistance = 0;
+
+    function getNDC(clientX, clientY) {
         const rect = container.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-        // Device tilt based on mouse position
-        const cx = (clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
-        const cy = (clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
-
-        targetTiltY = baseRotY + cx * 0.18;
-        targetTiltX = baseRotX - cy * 0.14;
+        if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
+        return {
+            x: ((clientX - rect.left) / rect.width) * 2 - 1,
+            y: -((clientY - rect.top) / rect.height) * 2 + 1
+        };
     }
 
-    container.addEventListener('mousemove', (e) => {
-        updateMouse(e.clientX, e.clientY);
+    // Pointer Down (Mouse click or touch start)
+    container.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        previousPointer = { x: e.clientX, y: e.clientY };
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+        dragDistance = 0;
+        container.style.cursor = 'grabbing';
+    });
+
+    // Pointer Move (Mouse move or touch drag)
+    window.addEventListener('pointermove', (e) => {
+        const ndc = getNDC(e.clientX, e.clientY);
+        mouse.x = ndc.x;
+        mouse.y = ndc.y;
+
+        if (isDragging) {
+            const dx = e.clientX - previousPointer.x;
+            const dy = e.clientY - previousPointer.y;
+            dragDistance += Math.abs(dx) + Math.abs(dy);
+
+            // Free 3D rotation speed
+            targetRotY += dx * 0.007;
+            targetRotX += dy * 0.007;
+
+            // Clamp vertical pitch so device stays readable
+            targetRotX = Math.max(-Math.PI * 0.42, Math.min(Math.PI * 0.42, targetRotX));
+
+            previousPointer = { x: e.clientX, y: e.clientY };
+        } else {
+            // Subtle hover parallax tilt when not dragging
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const cx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+                const cy = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+                hoverTiltY = cx * 0.08;
+                hoverTiltX = -cy * 0.06;
+            }
+        }
+    });
+
+    // Pointer Up (Mouse release or touch end)
+    window.addEventListener('pointerup', (e) => {
+        if (isDragging) {
+            isDragging = false;
+            container.style.cursor = 'grab';
+
+            // If user clicked without dragging (dragDistance < 6px), treat as button push
+            if (dragDistance < 6) {
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(buttons);
+                if (hits.length > 0) {
+                    const hitKey = hits[0].object;
+                    hitKey.userData.pressOffset = -0.32;
+                }
+            }
+        }
     });
 
     container.addEventListener('mouseleave', () => {
         mouse.x = -999;
         mouse.y = -999;
-        targetTiltX = baseRotX;
-        targetTiltY = baseRotY;
+        hoverTiltX = 0;
+        hoverTiltY = 0;
     });
 
-    // Realistic spring click on calculator buttons
-    container.addEventListener('click', (e) => {
-        updateMouse(e.clientX, e.clientY);
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObjects(buttons);
-        if (hits.length > 0) {
-            const hitKey = hits[0].object;
-            // Push key down into the calculator body
-            hitKey.userData.pressOffset = -0.32;
-        }
+    // Double-click resets rotation smoothly back to TEGAP (0, 0)
+    container.addEventListener('dblclick', () => {
+        targetRotX = 0;
+        targetRotY = 0;
     });
 
-    container.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 0) {
-            updateMouse(e.touches[0].clientX, e.touches[0].clientY);
-        }
-    }, { passive: true });
-
-    container.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 0) {
-            updateMouse(e.touches[0].clientX, e.touches[0].clientY);
-        }
-    }, { passive: true });
+    container.style.cursor = 'grab';
 
     // --- Animation Loop ---
     const clock = new THREE.Clock();
@@ -494,21 +502,23 @@
 
         const elapsedTime = clock.getElapsedTime();
 
-        // Raycasting for hover state
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObjects(buttons);
-        const activeHit = hits.length > 0 ? hits[0].object : null;
+        // Raycasting for hover state on buttons (only when not dragging)
+        if (!isDragging) {
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(buttons);
+            const activeHit = hits.length > 0 ? hits[0].object : null;
 
-        if (activeHit !== hoveredKey) {
-            if (hoveredKey) {
-                hoveredKey.userData.isHovered = false;
-            }
-            hoveredKey = activeHit;
-            if (hoveredKey) {
-                hoveredKey.userData.isHovered = true;
-                container.style.cursor = 'pointer';
-            } else {
-                container.style.cursor = 'default';
+            if (activeHit !== hoveredKey) {
+                if (hoveredKey) {
+                    hoveredKey.userData.isHovered = false;
+                }
+                hoveredKey = activeHit;
+                if (hoveredKey) {
+                    hoveredKey.userData.isHovered = true;
+                    container.style.cursor = 'pointer';
+                } else {
+                    container.style.cursor = 'grab';
+                }
             }
         }
 
@@ -517,10 +527,10 @@
             const u = key.userData;
 
             // 1. Subtle breathing wave
-            const wave = Math.sin(elapsedTime * 1.8 + (u.row + u.col) * 0.7) * 0.06;
+            const wave = Math.sin(elapsedTime * 1.8 + (u.row + u.col) * 0.7) * 0.05;
 
             // 2. Hover elevation lift
-            const hoverLift = u.isHovered ? 0.28 : 0;
+            const hoverLift = u.isHovered ? 0.26 : 0;
 
             // 3. Spring press recovery (lerp back to 0)
             u.pressOffset += (0 - u.pressOffset) * 0.18;
@@ -537,9 +547,12 @@
             key.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
         });
 
-        // Smooth device tilt (parallax)
-        deviceGroup.rotation.x += (targetTiltX - deviceGroup.rotation.x) * 0.065;
-        deviceGroup.rotation.y += (targetTiltY - deviceGroup.rotation.y) * 0.065;
+        // Smooth device rotation (dragged 3D rotation + hover parallax)
+        rotX += ((targetRotX + hoverTiltX) - rotX) * 0.08;
+        rotY += ((targetRotY + hoverTiltY) - rotY) * 0.08;
+
+        deviceGroup.rotation.x = rotX;
+        deviceGroup.rotation.y = rotY;
 
         renderer.render(scene, camera);
     }
