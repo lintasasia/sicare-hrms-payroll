@@ -5,9 +5,16 @@ $pageTitle = $isGlobalConfig ? 'Konfigurasi Global' : 'Pengaturan Sistem';
 $pageSubtitle = $isGlobalConfig 
     ? 'Konfigurasi parameter sistem global, keamanan, serta kebijakan operasional perusahaan.' 
     : 'Konfigurasi lokasi kantor, jam kerja, toleransi, dan kebijakan WFA/WFC/WFO/WFH.';
-use App\Services\ViewHelper;
 
-[$cfg, $holidays] = ViewHelper::getGlobalSettingsAndHolidays();
+$cfg = [];
+$holidays = [];
+try {
+    $db = \App\Config\Database::getInstance()->getConnection();
+    $rows = $db->query("SELECT `key`, `value` FROM global_settings")->fetchAll();
+    foreach ($rows as $r) { $cfg[$r['key']] = $r['value']; }
+    
+    $holidays = $db->query("SELECT * FROM company_holidays ORDER BY holiday_date ASC")->fetchAll();
+} catch (Exception $e) { /* table may not exist yet */ }
 
 // Fallback defaults
 $cfg = array_merge([
@@ -43,6 +50,9 @@ $cfg = array_merge([
     'app_idle_timeout_sec'     => '0',
     'app_idle_countdown_sec'   => '0',
     'google_maps_api_key'      => '',
+    'finance_api_url'          => $_ENV['FINANCE_API_URL'] ?? 'https://finance.lintas.asia/api/v1',
+    'finance_api_key'          => $_ENV['FINANCE_API_KEY'] ?? '',
+    'finance_api_timeout'      => $_ENV['FINANCE_API_TIMEOUT'] ?? '10',
 ], $cfg);
 
 $wfaDaysArr = array_filter(array_map('trim', explode(',', $cfg['wfa_days'])));
@@ -165,7 +175,7 @@ $allDays = ['Mon' => 'Senin', 'Tue' => 'Selasa', 'Wed' => 'Rabu', 'Thu' => 'Kami
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
-.settings-section-title { font-family:'Ubuntu',sans-serif; font-weight:800; font-size:.875rem; color:#000666; letter-spacing:.02em; }
+.settings-section-title { font-family:'Manrope',sans-serif; font-weight:800; font-size:.875rem; color:#000666; letter-spacing:.02em; }
 .settings-input {
     width:100%; padding:.6rem .9rem; font-size:.8rem; font-weight:600; color:#1a1c2d;
     background:#f8f9fa; border:1.5px solid #dde0f0; border-radius:.75rem;
@@ -229,7 +239,6 @@ $allDays = ['Mon' => 'Senin', 'Tue' => 'Selasa', 'Wed' => 'Rabu', 'Thu' => 'Kami
     </div>
 
     <form id="settingsForm" enctype="multipart/form-data" onsubmit="saveSettings(event)">
-        <?= csrfField() ?>
         <input type="hidden" id="work_min_start_time_enabled_hidden" name="work_min_start_time_enabled" value="<?= htmlspecialchars($cfg['work_min_start_time_enabled']) ?>" />
         <input type="hidden" id="work_min_end_time_enabled_hidden" name="work_min_end_time_enabled" value="<?= htmlspecialchars($cfg['work_min_end_time_enabled']) ?>" />
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -633,6 +642,80 @@ $allDays = ['Mon' => 'Senin', 'Tue' => 'Selasa', 'Wed' => 'Rabu', 'Thu' => 'Kami
                     </div>
                 </div>
 
+                <!-- === INTEGRASI EXTERNAL FINANCE API (FINANCE.LINTAS.ASIA) === -->
+                <div class="settings-card p-6" id="cardFinanceApi">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                        <div class="flex items-center gap-2.5">
+                            <span class="material-symbols-outlined text-blue-700 text-xl p-2 rounded-xl" style="background:rgba(37,99,235,.08)">hub</span>
+                            <div>
+                                <h2 class="settings-section-title" style="color:#1d4ed8">Integrasi Finance ERP API (finance.lintas.asia)</h2>
+                                <p class="text-xs text-on-surface-variant mt-0.5">Konfigurasi endpoint &amp; Private API Key untuk sinkronisasi riwayat gaji serta status pembayaran slip karyawan.</p>
+                            </div>
+                        </div>
+                        <a href="https://finance.lintas.asia/api/docs" target="_blank" class="self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors">
+                            <span class="material-symbols-outlined text-sm">menu_book</span>
+                            Swagger Docs
+                        </a>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                        <div class="md:col-span-2">
+                            <label class="settings-label" for="finance_api_url">Base URL API Finance</label>
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-on-surface-variant text-base">link</span>
+                                <input type="url" id="finance_api_url" name="finance_api_url"
+                                    value="<?= htmlspecialchars($cfg['finance_api_url']) ?>"
+                                    placeholder="https://finance.lintas.asia/api/v1"
+                                    class="settings-input font-mono text-sm" style="padding:.6rem" />
+                            </div>
+                            <p class="settings-helper mt-1">URL endpoint utama REST API Finance ERP (harus diawali https://).</p>
+                        </div>
+
+                        <div>
+                            <label class="settings-label" for="finance_api_key">Private API Key (X-API-KEY)</label>
+                            <div class="relative flex items-center">
+                                <input type="password" id="finance_api_key" name="finance_api_key"
+                                    value="<?= htmlspecialchars($cfg['finance_api_key']) ?>"
+                                    placeholder="la_sec_..."
+                                    class="settings-input font-mono text-sm pr-20" style="padding:.6rem 5rem .6rem .75rem" />
+                                <div class="absolute right-2 flex items-center gap-1">
+                                    <button type="button" onclick="toggleApiKeyVisibility()" class="p-1 rounded text-on-surface-variant hover:text-primary" title="Tampilkan/Sembunyikan Key">
+                                        <span class="material-symbols-outlined text-base" id="eyeIcon">visibility</span>
+                                    </button>
+                                    <button type="button" onclick="copyApiKey()" class="p-1 rounded text-on-surface-variant hover:text-primary" title="Salin Key">
+                                        <span class="material-symbols-outlined text-base">content_copy</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="settings-helper mt-1">Kunci otentikasi rahasia yang digenerate dari menu Pengaturan di finance.lintas.asia.</p>
+                        </div>
+
+                        <div>
+                            <label class="settings-label" for="finance_api_timeout">Batas Waktu Request (Timeout)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="finance_api_timeout" name="finance_api_timeout"
+                                    value="<?= htmlspecialchars($cfg['finance_api_timeout']) ?>"
+                                    min="3" max="60" step="1"
+                                    class="settings-input font-mono" style="padding:.6rem" />
+                                <span class="text-xs font-semibold text-on-surface-variant whitespace-nowrap">detik</span>
+                            </div>
+                            <p class="settings-helper mt-1">Waktu maksimal cURL menunggu respon server sebelum timeout (rekomendasi: 10 detik).</p>
+                        </div>
+                    </div>
+
+                    <!-- Connection Tester Action -->
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-slate-500 text-lg" id="testApiStatusIcon">info</span>
+                            <span class="text-xs text-slate-600 font-medium" id="testApiStatusText">Klik tombol untuk menguji konektivitas &amp; keabsahan API Key secara langsung.</span>
+                        </div>
+                        <button type="button" id="btnTestFinanceApi" onclick="testFinanceApiConnection()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 transition shadow-sm whitespace-nowrap">
+                            <span class="material-symbols-outlined text-sm">wifi_tethering</span>
+                            Tes Koneksi ke Finance
+                        </button>
+                    </div>
+                </div>
+
                 <!-- === PENGATURAN KLAIM REIMBURSEMENT (DEFAULT) === -->
                 <div class="settings-card p-6">
                     <div class="flex items-center gap-2.5 mb-5">
@@ -874,19 +957,10 @@ $allDays = ['Mon' => 'Senin', 'Tue' => 'Selasa', 'Wed' => 'Rabu', 'Thu' => 'Kami
 <script>
 const getRoutePrefix = () => {
     const p = window.location.pathname;
-    let base = '';
-    const routes = ['/hrops', '/superadmin/system-settings', '/superadmin', '/admin'];
-    for (let route of routes) {
-        if (p.includes(route)) {
-            base = p.split(route)[0];
-            break;
-        }
-    }
-    
-    if (p.includes('/hrops')) return base + '/hrops';
-    if (p.includes('/superadmin/system-settings')) return base + '/superadmin/system-settings';
-    if (p.includes('/superadmin')) return base + '/superadmin';
-    return base + '/admin';
+    if (p.startsWith('/hrops')) return '/hrops';
+    if (p.startsWith('/superadmin/system-settings')) return '/superadmin/system-settings';
+    if (p.startsWith('/superadmin')) return '/superadmin';
+    return '/admin';
 };
 // ── Radius sync ──────────────────────────────────────────────
 function syncRadius(v) {
@@ -902,6 +976,99 @@ function syncHomeRadius(v) {
     document.getElementById('home_radius_m').value = v;
     document.getElementById('homeRadiusVal').textContent = v;
     document.getElementById('cfg_home_radius').textContent = v + 'm';
+}
+
+// ── Finance API Helpers ───────────────────────────────────────
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('finance_api_key');
+    const eye = document.getElementById('eyeIcon');
+    if (!input || !eye) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        eye.textContent = 'visibility_off';
+    } else {
+        input.type = 'password';
+        eye.textContent = 'visibility';
+    }
+}
+
+function copyApiKey() {
+    const input = document.getElementById('finance_api_key');
+    if (!input || !input.value) {
+        Swal.fire({ title: 'Kosong', text: 'Kunci API belum diisi.', icon: 'warning', confirmButtonColor: '#000666' });
+        return;
+    }
+    navigator.clipboard.writeText(input.value).then(() => {
+        Swal.fire({ title: 'Disalin!', text: 'API Key berhasil disalin ke clipboard.', icon: 'success', timer: 1200, showConfirmButton: false });
+    });
+}
+
+function testFinanceApiConnection() {
+    const btn = document.getElementById('btnTestFinanceApi');
+    const statusIcon = document.getElementById('testApiStatusIcon');
+    const statusText = document.getElementById('testApiStatusText');
+    const url = document.getElementById('finance_api_url') ? document.getElementById('finance_api_url').value.trim() : '';
+    const key = document.getElementById('finance_api_key') ? document.getElementById('finance_api_key').value.trim() : '';
+    const timeout = document.getElementById('finance_api_timeout') ? document.getElementById('finance_api_timeout').value.trim() : '10';
+
+    if (!url || !key) {
+        Swal.fire({ title: 'Perhatian', text: 'Base URL dan API Key harus diisi terlebih dahulu untuk menguji koneksi.', icon: 'warning', confirmButtonColor: '#000666' });
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">refresh</span> Menghubungkan...';
+    statusText.textContent = 'Sedang menghubungi server Finance ERP...';
+    statusIcon.textContent = 'sync';
+    statusIcon.className = 'material-symbols-outlined text-blue-600 text-lg animate-spin';
+
+    fetch(getRoutePrefix() + '/settings/test-finance-api', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ url: url, key: key, timeout: timeout })
+    })
+    .then(r => r.json())
+    .then(res => {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm">wifi_tethering</span> Tes Koneksi ke Finance';
+        if (res.success) {
+            statusIcon.className = 'material-symbols-outlined text-emerald-600 text-lg';
+            statusIcon.textContent = 'check_circle';
+            statusText.innerHTML = '<strong class="text-emerald-700">' + res.message + '</strong>';
+            Swal.fire({
+                title: 'Koneksi Berhasil!',
+                text: res.message,
+                icon: 'success',
+                confirmButtonColor: '#000666'
+            });
+        } else {
+            statusIcon.className = 'material-symbols-outlined text-red-600 text-lg';
+            statusIcon.textContent = 'error';
+            statusText.innerHTML = '<strong class="text-red-700">' + res.message + '</strong>';
+            Swal.fire({
+                title: 'Koneksi Gagal!',
+                text: res.message,
+                icon: 'error',
+                confirmButtonColor: '#000666'
+            });
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm">wifi_tethering</span> Tes Koneksi ke Finance';
+        statusIcon.className = 'material-symbols-outlined text-red-600 text-lg';
+        statusIcon.textContent = 'error';
+        statusText.innerHTML = '<strong class="text-red-700">Gagal melakukan request ke backend siCare.</strong>';
+        Swal.fire({
+            title: 'Error!',
+            text: 'Terjadi kesalahan jaringan: ' + err.message,
+            icon: 'error',
+            confirmButtonColor: '#000666'
+        });
+    });
 }
 
 // ── Map preview link ─────────────────────────────────────────
@@ -1781,11 +1948,10 @@ function saveSettings(e) {
             Swal.fire({ title: 'Gagal', text: data.message, icon: 'error', confirmButtonColor: '#ba1a1a' });
         }
     })
-    .catch((err) => {
-        console.error("Save settings fetch error:", err);
+    .catch(() => {
         btn.innerHTML = '<span class="material-symbols-outlined text-lg">save</span> Simpan Pengaturan';
         btn.disabled = false;
-        Swal.fire({ title: 'Error Koneksi', text: 'Detail: ' + err.message, icon: 'error', confirmButtonColor: '#ba1a1a' });
+        Swal.fire({ title: 'Error Koneksi', text: 'Tidak dapat terhubung ke server.', icon: 'error', confirmButtonColor: '#ba1a1a' });
     });
 }
 
@@ -1851,7 +2017,6 @@ function openAddHolidayModal() {
         const fd = new FormData();
         fd.append('holiday_date', result.value.date);
         fd.append('description', result.value.desc);
-        fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
         
         fetch(getRoutePrefix() + '/holidays/add', {
             method: 'POST',
@@ -1887,7 +2052,6 @@ function deleteHoliday(id) {
         
         const fd = new FormData();
         fd.append('id', id);
-        fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
         
         fetch(getRoutePrefix() + '/holidays/delete', {
             method: 'POST',
@@ -1941,7 +2105,6 @@ function editHoliday(id, currentDate, currentDesc) {
         fd.append('id', id);
         fd.append('holiday_date', result.value.date);
         fd.append('description', result.value.desc);
-        fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
         fetch(getRoutePrefix() + '/holidays/update', { method: 'POST', body: fd })
             .then(r => r.json())
             .then(data => {
@@ -2076,10 +2239,7 @@ function showGoogleHolidaysImporter() {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify({ 
-                    holidays: selectedHolidays, 
-                    csrf_token: document.querySelector('input[name="csrf_token"]').value 
-                })
+                body: JSON.stringify({ holidays: selectedHolidays })
             })
             .then(r => r.json())
             .then(res => {
