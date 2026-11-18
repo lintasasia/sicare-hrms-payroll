@@ -30,13 +30,21 @@
                 </a>
             </div>
         </div>
-        <div class="flex-1 relative pl-0 md:pl-6 flex items-center justify-center">
-            <!-- 3D Floating 3x3 Isometric Blocks Canvas (Enlarged Size & Google Pastel) -->
-            <div id="sicare-3d-container" class="w-full aspect-square max-w-[580px] relative z-0"></div>
+        <div class="flex-1 relative pl-0 md:pl-10">
+            <!-- Dark Navy Container (Tetap persis seperti awal) -->
+            <div class="w-full aspect-square rounded-[2.5rem] bg-[#0c145e] p-6 md:p-8 flex flex-col justify-between shadow-2xl relative z-0 overflow-hidden group">
+                <!-- 3D Canvas Mount Point inside dark card -->
+                <div id="sicare-3d-container" class="w-full flex-grow relative z-0 min-h-[320px]"></div>
+
+                <!-- Bottom Text inside dark box (Exact text from original UI) -->
+                <div class="mt-2 pr-2 text-right pointer-events-none">
+                    <p class="text-[#a0a5db] text-sm font-medium">Akses Semua Layanan Dalam Satu Portal</p>
+                </div>
+            </div>
             
-            <!-- Identity Chip Overlapping - Floating Animation (Exact design from Gambar 1) -->
-            <div class="absolute -bottom-6 left-0 md:left-4 p-5 bg-white rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] border border-gray-100 flex items-center gap-4 animate-float z-10 w-[280px]">
-                <div class="w-12 h-12 bg-[#8efb8b] rounded-full flex items-center justify-center shrink-0 shadow-sm">
+            <!-- Identity Chip Overlapping - Floating Animation (Exact design from original UI) -->
+            <div class="absolute -bottom-8 -left-8 p-5 bg-white rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.15)] border border-gray-100 flex items-center gap-4 animate-float z-10 w-[280px]">
+                <div class="w-12 h-12 bg-[#8efb8b] rounded-full flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined text-black text-xl" style="font-variation-settings: 'FILL' 1;">local_police</span>
                 </div>
                 <div class="flex flex-col justify-center">
