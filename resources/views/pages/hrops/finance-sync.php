@@ -82,7 +82,7 @@ try {
     <!-- ── Notice Banner Non-Destruktif ── -->
     <div class="bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white border border-blue-200/60 rounded-2xl p-4 sm:p-5 flex items-start gap-4 shadow-sm">
         <div class="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-            <span class="material-symbols-outlined text-xl">shield_check</span>
+            <span class="material-symbols-outlined text-xl select-none leading-none">verified_user</span>
         </div>
         <div class="space-y-1">
             <h3 class="text-sm font-bold text-primary">Sinkronisasi Aman &amp; Non-Destruktif (Upsert Protected)</h3>
