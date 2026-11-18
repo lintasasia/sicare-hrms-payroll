@@ -88,12 +88,12 @@ $baseSalary = !empty($dbUser['base_salary']) ? (float)$dbUser['base_salary'] : 0
 // ======================================================
 $currentYear = date('Y');
 
-// Fetch all approved payroll records for this user in the current year
+// Fetch all paid payroll records for this user in the current year
 $payrollStmt = $db->prepare("
     SELECT ep.*
     FROM employee_payroll ep
     WHERE ep.user_id = :user_id
-      AND ep.status IN ('Approved', 'Paid')
+      AND ep.status = 'Paid'
       AND ep.month_year LIKE :year_pattern
     ORDER BY ep.month_year DESC
 ");

@@ -928,8 +928,14 @@ class PayrollController {
                     $tahun = (int)($rp['periode']['tahun'] ?? 0);
                     if ($bulan < 1 || $tahun < 2000) continue;
 
+                    // HANYA sinkronkan payroll yang benar-benar SUDAH DIBAYAR di rekening
+                    $isPaid = (($rp['status_bayar'] ?? '') === 'SUDAH_DIBAYAR' || !empty($rp['is_paid']));
+                    if (!$isPaid) {
+                        continue;
+                    }
+
                     $monthYear = sprintf('%02d-%04d', $bulan, $tahun);
-                    $status = (($rp['status_bayar'] ?? '') === 'SUDAH_DIBAYAR' || !empty($rp['is_paid'])) ? 'Paid' : 'Approved';
+                    $status = 'Paid';
                     $paymentDate = !empty($rp['tanggal_bayar']) ? ($rp['tanggal_bayar'] . ' 00:00:00') : null;
 
                     $baseSalary = (float)($rp['penghasilan']['gaji_pokok'] ?? 0);
@@ -1101,8 +1107,30 @@ class PayrollController {
         }
 
         $monthYear = sprintf('%02d-%04d', $bulan, $tahun);
-        $statusBayar = strtoupper(trim($payload['status_bayar'] ?? 'SUDAH_DIBAYAR'));
-        $status = ($statusBayar === 'SUDAH_DIBAYAR' || !empty($payload['is_paid'])) ? 'Paid' : 'Approved';
+        $event = $payload['event'] ?? 'payroll.payment_pushed';
+        $statusBayar = strtoupper(trim($payload['status_bayar'] ?? ''));
+
+        // Jika event pembatalan bayar atau status BELUM_DIBAYAR: hapus record dari siCare
+        if ($event === 'payroll.payment_cancelled' || $statusBayar === 'BELUM_DIBAYAR') {
+            $delStmt = $this->db->prepare("DELETE FROM employee_payroll WHERE user_id = :uid AND month_year = :my");
+            $delStmt->execute(['uid' => $user['id'], 'my' => $monthYear]);
+            echo json_encode([
+                'success' => true,
+                'action' => 'deleted',
+                'message' => "Slip gaji {$user['first_name']} ({$monthYear}) dibatalkan / belum dibayar sehingga dihapus dari tampilan portal siCare.",
+            ]);
+            return;
+        }
+
+        // HANYA proses jika SUDAH_DIBAYAR
+        if ($statusBayar !== 'SUDAH_DIBAYAR' && empty($payload['is_paid'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => "Gaji belum dibayar. Slip hanya akan diterbitkan ke portal siCare setelah berstatus SUDAH_DIBAYAR di rekening.",
+            ]);
+            return;
+        }
+        $status = 'Paid';
         
         $tanggalBayar = $payload['tanggal_bayar'] ?? date('Y-m-d');
         $paymentDate = !empty($tanggalBayar) ? ($tanggalBayar . (strlen($tanggalBayar) === 10 ? ' 00:00:00' : '')) : date('Y-m-d H:i:s');
