@@ -14,10 +14,42 @@ class FinanceApiService {
     private string $apiKey;
     private int $timeout;
 
-    public function __construct(?string $baseUrl = null, ?string $apiKey = null, int $timeout = 10) {
-        $this->baseUrl = rtrim($baseUrl ?? $_ENV['FINANCE_API_URL'] ?? 'https://finance.lintas.asia/api/v1', '/');
-        $this->apiKey = $apiKey ?? $_ENV['FINANCE_API_KEY'] ?? '';
-        $this->timeout = $timeout;
+    public function __construct(?string $baseUrl = null, ?string $apiKey = null, ?int $timeout = null) {
+        $dbSettings = $this->loadDbSettings();
+
+        $this->baseUrl = rtrim(
+            $baseUrl
+            ?? ($dbSettings['finance_api_url'] ?? null)
+            ?? ($_ENV['FINANCE_API_URL'] ?? null)
+            ?? 'https://finance.lintas.asia/api/v1',
+            '/'
+        );
+        $this->apiKey = $apiKey
+            ?? ($dbSettings['finance_api_key'] ?? null)
+            ?? ($_ENV['FINANCE_API_KEY'] ?? null)
+            ?? '';
+        $this->timeout = $timeout
+            ?? (int)(($dbSettings['finance_api_timeout'] ?? null) ?? ($_ENV['FINANCE_API_TIMEOUT'] ?? null) ?? 10);
+    }
+
+    /**
+     * Memuat konfigurasi dinamis dari tabel global_settings di database.
+     */
+    private function loadDbSettings(): array {
+        try {
+            $db = \App\Config\Database::getInstance()->getConnection();
+            $stmt = $db->query("SELECT `key`, `value` FROM global_settings WHERE `key` IN ('finance_api_url', 'finance_api_key', 'finance_api_timeout')");
+            $rows = $stmt->fetchAll();
+            $res = [];
+            foreach ($rows as $r) {
+                if (isset($r['value']) && $r['value'] !== '') {
+                    $res[$r['key']] = $r['value'];
+                }
+            }
+            return $res;
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /**

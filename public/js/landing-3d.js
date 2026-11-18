@@ -1,43 +1,112 @@
 /**
- * siCare - 3D Floating Interactive Isometric Grid
- * - 9 individual 3D beveled blocks with Official Google Solid Colors (Blue, Red, Yellow, Green)
- * - Extra-large, centered 2D icons in crisp white with subtle depth shadow
- * - Staggered floating wave animation
- * - Interactive raycaster hover (blocks elevate and react on hover/click)
- * - Mouse parallax & 3D tilt
- * - Transparent background (no outer dark container)
+ * siCare - 3D Interactive Calculator Device with Beveled Keys
+ * Built with Three.js (r128 / r186 compatible) following Three.js Cloud Skills guidelines.
+ * Features:
+ * - Default view: TEGAP (straight front-facing, upright, non-tilted) exactly like the 2D UI.
+ * - Colors: 100% identical to the original deep navy & rich corporate palette (#0c145e, #23459c, etc.).
+ * - Generous camera framing & adaptive frustum: NO CLIPPING / NEVER CUT OFF at top or bottom.
+ * - Fully Interactive 3D Rotation: User can click & drag (or touch drag) to rotate in 3D.
+ * - Interactive hover parallax tilt when hovering with mouse.
+ * - Double-click / tap to smoothly reset orientation back to tegap (0, 0).
+ * - 9 Raised 3D Mechanical Calculator Keys with spring push click, hover lift, and idle wave.
+ * - "Akses Semua Layanan Dalam Satu Portal" etched safely on chassis face without clipping.
  */
 
 (function () {
     const container = document.getElementById('sicare-3d-container');
     if (!container || typeof THREE === 'undefined') return;
 
-    // --- Official Google Solid Colors & 9 Items with Unicode fallbacks ---
+    // --- Helper for 2D Rounded Rectangle Path (Cross-browser Canvas) ---
+    function drawRoundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
+    // --- Helper for Three.js Shape Rounded Rectangle ---
+    function createRoundedRectShape(width, height, radius) {
+        const shape = new THREE.Shape();
+        const halfW = width / 2;
+        const halfH = height / 2;
+        const r = Math.min(radius, halfW, halfH);
+
+        shape.moveTo(-halfW + r, -halfH);
+        shape.lineTo(halfW - r, -halfH);
+        shape.quadraticCurveTo(halfW, -halfH, halfW, -halfH + r);
+        shape.lineTo(halfW, halfH - r);
+        shape.quadraticCurveTo(halfW, halfH, halfW - r, halfH);
+        shape.lineTo(-halfW + r, halfH);
+        shape.quadraticCurveTo(-halfW, halfH, -halfW, halfH - r);
+        shape.lineTo(-halfW, -halfH + r);
+        shape.quadraticCurveTo(-halfW, -halfH, -halfW + r, -halfH);
+        return shape;
+    }
+
+    // --- Custom UV Generator for ExtrudeGeometry to map 0..1 to front cap ---
+    function createNormalizedUVGenerator(minX, maxX, minY, maxY) {
+        const rangeX = maxX - minX || 1;
+        const rangeY = maxY - minY || 1;
+        return {
+            generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
+                const ax = (vertices[indexA * 3] - minX) / rangeX;
+                const ay = (vertices[indexA * 3 + 1] - minY) / rangeY;
+                const bx = (vertices[indexB * 3] - minX) / rangeX;
+                const by = (vertices[indexB * 3 + 1] - minY) / rangeY;
+                const cx = (vertices[indexC * 3] - minX) / rangeX;
+                const cy = (vertices[indexC * 3 + 1] - minY) / rangeY;
+                return [
+                    new THREE.Vector2(ax, ay),
+                    new THREE.Vector2(bx, by),
+                    new THREE.Vector2(cx, cy)
+                ];
+            },
+            generateSideWallUV: function () {
+                return [
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(1, 0),
+                    new THREE.Vector2(1, 1),
+                    new THREE.Vector2(0, 1)
+                ];
+            }
+        };
+    }
+
+    // --- Exact Original Palette & Items (Exact 2D match) ---
     const gridItems = [
         // Row 0
-        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#4285F4', label: 'Lowongan Kerja' },       // Google Blue
-        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#EA4335', label: 'Kartu Pegawai' },       // Google Red
-        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#34A853', label: 'Struktur Tim' },       // Google Green
+        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#23459c', label: 'Lowongan Kerja' },
+        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#3d316e', label: 'Kartu Pegawai' },
+        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#322d7d', label: 'Struktur Tim' },
         // Row 1
-        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#FBBC04', label: 'Tugas & Cuti' },   // Google Yellow
-        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#1a73e8', label: 'Operasional' },   // Google Deep Blue
-        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\ue7e7', color: '#d93025', label: 'Departemen' }, // Google Deep Red
+        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#20437d', label: 'Tugas & Cuti' },
+        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#443d63', label: 'Operasional' },
+        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\ue7e7', color: '#1d4686', label: 'Departemen' },
         // Row 2
-        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#1e8e3e', label: 'Presensi ESS' },   // Google Deep Green
-        { row: 2, col: 1, icon: 'leaderboard', unicode: '\uf20c', color: '#f9ab00', label: 'KPI & Laporan' }, // Google Deep Amber
-        { row: 2, col: 2, icon: 'handshake', unicode: '\uebc5', color: '#4285F4', label: 'Onboarding' }       // Google Blue
+        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#3d2b6e', label: 'Presensi ESS' },
+        { row: 2, col: 1, icon: 'leaderboard', unicode: '\uf20c', color: '#1c3f87', label: 'KPI & Laporan' },
+        { row: 2, col: 2, icon: 'handshake', unicode: '\uebc5', color: '#423561', label: 'Onboarding' }
     ];
 
     // --- Scene, Camera, Renderer ---
     const scene = new THREE.Scene();
 
-    const width = container.clientWidth || 520;
-    const height = container.clientHeight || 520;
+    const width = container.clientWidth || 500;
+    const height = container.clientHeight || 500;
+    const aspect = width / height;
 
-    // Isometric-angled perspective camera
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 1000);
-    camera.position.set(13.2, 17.0, 18.2);
-    camera.lookAt(0, -0.4, 0);
+    const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 100);
+    // Camera positioned so model is large & bold like original, with safe margins so it doesn't cut off
+    const baseCameraZ = 20.2;
+    camera.position.set(0, 0, aspect < 1 ? baseCameraZ / aspect : baseCameraZ);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -48,138 +117,216 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05; // Balanced exposure to keep colors deep and saturated
+
+    // Use NoToneMapping so exact hex colors (#0c145e, #23459c, etc.) render at true RGB values
+    renderer.toneMapping = THREE.NoToneMapping;
+
+    if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) {
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+    } else if ('outputEncoding' in renderer && THREE.sRGBEncoding) {
+        renderer.outputEncoding = THREE.sRGBEncoding;
+    }
+
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // --- Master Pivot Group ---
-    const masterGroup = new THREE.Group();
-    scene.add(masterGroup);
+    // --- Master Device Group (Holds chassis + keys; fully rotatable in 3D) ---
+    const deviceGroup = new THREE.Group();
+    scene.add(deviceGroup);
 
-    // Initial slight isometric angle
-    masterGroup.rotation.y = -Math.PI / 8; // -22.5 deg
-    masterGroup.rotation.x = Math.PI / 14; // ~12 deg
+    // Default view: TEGAP (straight, 0 rotation, exactly like the 2D layout)
+    deviceGroup.rotation.set(0, 0, 0);
 
-    // --- Vibrant Directional Lighting ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.15); // Not over-bright to maintain solid saturation
+    // --- Lighting: Balanced to preserve 100% color accuracy while giving 3D bevels ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.98);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.65);
-    scene.add(hemiLight);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    keyLight.position.set(12, 16, 18);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0003;
+    keyLight.shadow.camera.near = 5;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -9;
+    keyLight.shadow.camera.right = 9;
+    keyLight.shadow.camera.top = 9;
+    keyLight.shadow.camera.bottom = -9;
+    scene.add(keyLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.9);
-    sunLight.position.set(16, 26, 18);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
-    sunLight.shadow.camera.near = 5;
-    sunLight.shadow.camera.far = 60;
-    const d = 12;
-    sunLight.shadow.camera.left = -d;
-    sunLight.shadow.camera.right = d;
-    sunLight.shadow.camera.top = d;
-    sunLight.shadow.camera.bottom = -d;
-    sunLight.shadow.bias = -0.0004;
-    scene.add(sunLight);
+    const rimLight = new THREE.DirectionalLight(0x243b91, 0.5);
+    rimLight.position.set(-14, -10, 10);
+    scene.add(rimLight);
 
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.4);
-    fillLight.position.set(-16, 12, -15);
-    scene.add(fillLight);
+    // --- Soft Ground Contact Shadow (Behind Calculator) ---
+    (function createGroundShadow() {
+        const shadowCanvas = document.createElement('canvas');
+        shadowCanvas.width = 256;
+        shadowCanvas.height = 256;
+        const sctx = shadowCanvas.getContext('2d');
 
-    // --- Soft Contact Ground Shadow ---
-    const shadowPlaneGeo = new THREE.PlaneGeometry(32, 32);
-    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.16 });
-    const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.position.y = -2.4;
-    shadowPlane.receiveShadow = true;
-    masterGroup.add(shadowPlane);
+        const grad = sctx.createRadialGradient(128, 128, 10, 128, 128, 120);
+        grad.addColorStop(0, 'rgba(8, 12, 60, 0.35)');
+        grad.addColorStop(0.6, 'rgba(12, 20, 94, 0.15)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        sctx.fillStyle = grad;
+        sctx.fillRect(0, 0, 256, 256);
 
-    // --- Geometry: Rounded 3D Block (Enlarged size) ---
-    const blockSize = 3.55;        // Large chunky block size
-    const blockThickness = 0.95;   // 3D extruded depth
-    const cornerRadius = 0.65;     // Smooth rounded corner
+        const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            map: shadowTex,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.70
+        });
+        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), shadowMat);
+        shadowMesh.position.set(0, -0.2, -1.2);
+        deviceGroup.add(shadowMesh);
+    })();
 
-    // Create a 2D rounded rectangle shape
-    const shape = new THREE.Shape();
-    const half = blockSize / 2;
-    const r = cornerRadius;
-    shape.moveTo(-half + r, -half);
-    shape.lineTo(half - r, -half);
-    shape.quadraticCurveTo(half, -half, half, -half + r);
-    shape.lineTo(half, half - r);
-    shape.quadraticCurveTo(half, half, half - r, half);
-    shape.lineTo(-half + r, half);
-    shape.quadraticCurveTo(-half, half, -half, half - r);
-    shape.lineTo(-half, -half + r);
-    shape.quadraticCurveTo(-half, -half, -half + r, -half);
+    // --- 1. 3D Calculator Chassis / Body ---
+    const chassisWidth = 11.2;
+    const chassisHeight = 11.4;
+    const chassisRadius = 1.4;
+    const chassisDepth = 1.0;
+    const chassisBevel = 0.30;
 
-    const extrudeSettings = {
-        depth: blockThickness,
+    const chassisShape = createRoundedRectShape(chassisWidth, chassisHeight, chassisRadius);
+    const chassisGeo = new THREE.ExtrudeGeometry(chassisShape, {
+        depth: chassisDepth,
         bevelEnabled: true,
         bevelSegments: 6,
         steps: 1,
-        bevelSize: 0.2,
-        bevelThickness: 0.2
-    };
-    const blockGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    blockGeo.rotateX(Math.PI / 2);
-    blockGeo.center();
+        bevelSize: chassisBevel,
+        bevelThickness: chassisBevel,
+        UVGenerator: createNormalizedUVGenerator(
+            -chassisWidth / 2, chassisWidth / 2,
+            -chassisHeight / 2, chassisHeight / 2
+        )
+    });
+    chassisGeo.center();
 
-    // --- Texture Generator: Solid Google Color with Extra-Large Centered 2D Icon ---
-    function makeIconTexture(iconName, unicodeGlyph, solidHex) {
+    // Chassis Front Texture (Exact #0c145e dark navy, recessed tray & safely padded bottom text)
+    const chassisCanvas = document.createElement('canvas');
+    chassisCanvas.width = 1024;
+    chassisCanvas.height = 1024;
+    const cctx = chassisCanvas.getContext('2d');
+
+    function renderChassisCanvas() {
+        cctx.clearRect(0, 0, 1024, 1024);
+
+        // Exact dark navy background matching original 2D container
+        cctx.fillStyle = '#0c145e';
+        cctx.fillRect(0, 0, 1024, 1024);
+
+        // Inset keypad well where buttons sit
+        cctx.save();
+        cctx.fillStyle = '#080d44';
+        drawRoundRect(cctx, 56, 56, 912, 796, 42);
+        cctx.fill();
+
+        // Well subtle inset border
+        cctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+        cctx.lineWidth = 3;
+        cctx.stroke();
+        cctx.restore();
+
+        // Bottom text: "Akses Semua Layanan Dalam Satu Portal" (Positioned safely above bottom bevel)
+        cctx.save();
+        cctx.fillStyle = '#a0a5db';
+        cctx.font = '600 27px -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif';
+        cctx.textAlign = 'right';
+        cctx.textBaseline = 'middle';
+        cctx.fillText('Akses Semua Layanan Dalam Satu Portal', 938, 936);
+        cctx.restore();
+    }
+
+    renderChassisCanvas();
+    const chassisTex = new THREE.CanvasTexture(chassisCanvas);
+    chassisTex.anisotropy = 4;
+
+    // Chassis side & bevel material: PBR for 3D highlights when rotated
+    const chassisSideMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#0c145e'),
+        roughness: 0.35,
+        metalness: 0.12
+    });
+
+    // Chassis front cap: MeshLambertMaterial so colors stay 100% solid & true to #0c145e
+    const chassisFrontMat = new THREE.MeshLambertMaterial({
+        map: chassisTex
+    });
+
+    const chassisMesh = new THREE.Mesh(chassisGeo, [chassisFrontMat, chassisSideMat]);
+    chassisMesh.receiveShadow = true;
+    chassisMesh.castShadow = true;
+    deviceGroup.add(chassisMesh);
+
+    // --- 2. 9 Raised 3D Calculator Keys / Buttons ---
+    const buttonSize = 2.40;
+    const buttonThickness = 0.44;
+    const buttonRadius = 0.40;
+    const buttonBevel = 0.12;
+
+    const buttonShape = createRoundedRectShape(buttonSize, buttonSize, buttonRadius);
+    const buttonGeo = new THREE.ExtrudeGeometry(buttonShape, {
+        depth: buttonThickness,
+        bevelEnabled: true,
+        bevelSegments: 5,
+        steps: 1,
+        bevelSize: buttonBevel,
+        bevelThickness: buttonBevel,
+        UVGenerator: createNormalizedUVGenerator(
+            -buttonSize / 2, buttonSize / 2,
+            -buttonSize / 2, buttonSize / 2
+        )
+    });
+    buttonGeo.center();
+
+    // Canvas Texture generator for each button's front face
+    function makeKeyTexture(iconName, unicodeGlyph, hexColor) {
         const cvs = document.createElement('canvas');
         cvs.width = 512;
         cvs.height = 512;
         const ctx = cvs.getContext('2d');
 
-        function renderCanvas() {
-            ctx.clearRect(0, 0, cvs.width, cvs.height);
+        function renderKey() {
+            ctx.clearRect(0, 0, 512, 512);
 
-            // Rich Solid Google Color
-            ctx.fillStyle = solidHex;
+            // Exact solid button color
+            ctx.fillStyle = hexColor;
             ctx.fillRect(0, 0, 512, 512);
 
-            // Crisp subtle inner border
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(5, 5, 502, 502);
+            // Subtle inner key rim
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, 504, 504);
 
-            // Extra Large Full Centered 2D Icon (360px)
+            // Centered 2D White Material Symbols Icon
             ctx.save();
             ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // High-contrast clean drop shadow under white icon
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-            ctx.shadowBlur = 18;
-            ctx.shadowOffsetY = 6;
+            // Soft icon drop shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+            ctx.shadowBlur = 14;
+            ctx.shadowOffsetY = 4;
 
-            ctx.font = 'normal 360px "Material Symbols Outlined", sans-serif';
-
-            // Center alignment with optical compensation
-            const glyphToDraw = unicodeGlyph || iconName;
-            ctx.fillText(glyphToDraw, 256, 262);
+            ctx.font = 'normal 210px "Material Symbols Outlined", sans-serif';
+            const glyph = unicodeGlyph || iconName;
+            ctx.fillText(glyph, 256, 260);
             ctx.restore();
-
-            // Subtle top gloss sheen for sleek 3D look
-            const sheen = ctx.createLinearGradient(0, 0, 512, 512);
-            sheen.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-            sheen.addColorStop(0.35, 'rgba(255, 255, 255, 0.0)');
-            sheen.addColorStop(1, 'rgba(0, 0, 0, 0.10)');
-            ctx.fillStyle = sheen;
-            ctx.fillRect(0, 0, 512, 512);
         }
 
-        renderCanvas();
+        renderKey();
         const tex = new THREE.CanvasTexture(cvs);
         tex.anisotropy = 4;
 
         if (document.fonts) {
             document.fonts.ready.then(() => {
-                renderCanvas();
+                renderKey();
                 tex.needsUpdate = true;
             });
         }
@@ -187,106 +334,159 @@
         return tex;
     }
 
-    // --- Build 3x3 Grid of 3D Blocks ---
-    const blockSpacing = 4.45;
-    const blocks = [];
+    // Grid layout parameters
+    const spacing = 2.85;
+    const gridCenterY = 0.65; // centered in keypad well
+    const chassisFrontZ = chassisDepth / 2 + chassisBevel; // ~0.80
+    const buttonBaseZ = chassisFrontZ + buttonThickness / 2 + buttonBevel; // ~1.14
+
+    const buttons = [];
 
     gridItems.forEach((item) => {
-        const topTexture = makeIconTexture(item.icon, item.unicode, item.color);
+        const topTexture = makeKeyTexture(item.icon, item.unicode, item.color);
 
-        // Solid rich side material
+        // Sides and bevel material with specular sheen when rotated in 3D
         const sideMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(item.color),
-            roughness: 0.24,
-            metalness: 0.08
+            roughness: 0.30,
+            metalness: 0.15
         });
 
-        const topMat = new THREE.MeshStandardMaterial({
-            map: topTexture,
-            roughness: 0.22,
-            metalness: 0.05
+        // Top face material: MeshLambertMaterial preserves 100% exact original color
+        const frontMat = new THREE.MeshLambertMaterial({
+            map: topTexture
         });
 
-        // Index 0: top/bottom cap faces, Index 1: beveled sides
-        const blockMaterials = [topMat, sideMat];
-        const mesh = new THREE.Mesh(blockGeo, blockMaterials);
+        const keyMesh = new THREE.Mesh(buttonGeo, [frontMat, sideMat]);
 
-        // Coordinates (-1, 0, 1 on X and Z)
-        const posX = (item.col - 1) * blockSpacing;
-        const posZ = (item.row - 1) * blockSpacing;
+        // Position in local deviceGroup space
+        const posX = (item.col - 1) * spacing;
+        const posY = -(item.row - 1) * spacing + gridCenterY;
 
-        mesh.position.set(posX, 0, posZ);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        keyMesh.position.set(posX, posY, buttonBaseZ);
+        keyMesh.castShadow = true;
+        keyMesh.receiveShadow = false;
 
-        mesh.userData = {
+        keyMesh.userData = {
             baseX: posX,
-            baseZ: posZ,
-            baseY: 0,
-            targetY: 0,
-            currentY: 0,
+            baseY: posY,
+            baseZ: buttonBaseZ,
+            currentZ: buttonBaseZ,
+            targetZ: buttonBaseZ,
+            pressOffset: 0,
             row: item.row,
             col: item.col,
-            color: item.color,
             isHovered: false
         };
 
-        masterGroup.add(mesh);
-        blocks.push(mesh);
+        deviceGroup.add(keyMesh);
+        buttons.push(keyMesh);
     });
 
-    // --- Interactive Raycasting for Hover & Click ---
+    // --- Interactive 3D Rotation (Bisa Diputar-putar Bebas) & Raycasting ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2(-999, -999);
-    let hoveredBlock = null;
+    let hoveredKey = null;
 
-    function updateMousePos(e) {
+    // Rotation angles
+    let rotX = 0;
+    let rotY = 0;
+    let targetRotX = 0;
+    let targetRotY = 0;
+
+    let hoverTiltX = 0;
+    let hoverTiltY = 0;
+
+    // Drag interaction tracking
+    let isDragging = false;
+    let previousPointer = { x: 0, y: 0 };
+    let dragDistance = 0;
+
+    function getNDC(clientX, clientY) {
         const rect = container.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
+        return {
+            x: ((clientX - rect.left) / rect.width) * 2 - 1,
+            y: -((clientY - rect.top) / rect.height) * 2 + 1
+        };
     }
 
-    container.addEventListener('mousemove', (e) => {
-        updateMousePos(e);
+    // Pointer Down (Mouse click or touch start)
+    container.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        previousPointer = { x: e.clientX, y: e.clientY };
+        dragDistance = 0;
+        container.style.cursor = 'grabbing';
+    });
 
-        // Subtle mouse parallax tilt of the entire grid
-        const cx = (e.clientX - (container.offsetLeft + container.clientWidth / 2)) / window.innerWidth;
-        const cy = (e.clientY - (container.offsetTop + container.clientHeight / 2)) / window.innerHeight;
-        targetRotY = -Math.PI / 8 + cx * 0.35;
-        targetRotX = Math.PI / 14 + cy * 0.22;
+    // Pointer Move (Mouse move or touch drag)
+    window.addEventListener('pointermove', (e) => {
+        const ndc = getNDC(e.clientX, e.clientY);
+        mouse.x = ndc.x;
+        mouse.y = ndc.y;
+
+        if (isDragging) {
+            const dx = e.clientX - previousPointer.x;
+            const dy = e.clientY - previousPointer.y;
+            dragDistance += Math.abs(dx) + Math.abs(dy);
+
+            // Free 3D rotation speed
+            targetRotY += dx * 0.007;
+            targetRotX += dy * 0.007;
+
+            // Safe rotation limits so device stays well framed without clipping
+            targetRotX = Math.max(-0.45, Math.min(0.45, targetRotX));
+            targetRotY = Math.max(-0.75, Math.min(0.75, targetRotY));
+
+            previousPointer = { x: e.clientX, y: e.clientY };
+        } else {
+            // Subtle hover parallax tilt when not dragging
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const cx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+                const cy = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+                hoverTiltY = cx * 0.07;
+                hoverTiltX = -cy * 0.05;
+            }
+        }
+    });
+
+    // Pointer Up (Mouse release or touch end)
+    window.addEventListener('pointerup', (e) => {
+        if (isDragging) {
+            isDragging = false;
+            container.style.cursor = 'grab';
+
+            // If user clicked without dragging (dragDistance < 6px), treat as button push
+            if (dragDistance < 6) {
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(buttons);
+                if (hits.length > 0) {
+                    const hitKey = hits[0].object;
+                    hitKey.userData.pressOffset = -0.32;
+                }
+            }
+        }
     });
 
     container.addEventListener('mouseleave', () => {
         mouse.x = -999;
         mouse.y = -999;
-        targetRotY = -Math.PI / 8;
-        targetRotX = Math.PI / 14;
+        hoverTiltX = 0;
+        hoverTiltY = 0;
     });
 
-    container.addEventListener('click', (e) => {
-        updateMousePos(e);
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(blocks);
-        if (intersects.length > 0) {
-            const hit = intersects[0].object;
-            // Elastic click press bounce
-            hit.userData.currentY = -0.42;
-        }
+    // Double-click resets rotation smoothly back to TEGAP (0, 0)
+    container.addEventListener('dblclick', () => {
+        targetRotX = 0;
+        targetRotY = 0;
     });
 
-    // --- Touch Support for Mobile ---
-    container.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 0) {
-            updateMousePos(e.touches[0]);
-        }
-    }, { passive: true });
+    container.style.cursor = 'grab';
 
     // --- Animation Loop ---
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
     let isVisible = true;
-    let targetRotY = -Math.PI / 8;
-    let targetRotX = Math.PI / 14;
 
     if ('IntersectionObserver' in window) {
         const observer = new IntersectionObserver((entries) => {
@@ -301,61 +501,83 @@
 
         const elapsedTime = clock.getElapsedTime();
 
-        // Check raycaster hover
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(blocks);
-        const newlyHovered = intersects.length > 0 ? intersects[0].object : null;
+        // Raycasting for hover state on buttons (only when not dragging)
+        if (!isDragging) {
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(buttons);
+            const activeHit = hits.length > 0 ? hits[0].object : null;
 
-        if (newlyHovered !== hoveredBlock) {
-            if (hoveredBlock) {
-                hoveredBlock.userData.isHovered = false;
-            }
-            hoveredBlock = newlyHovered;
-            if (hoveredBlock) {
-                hoveredBlock.userData.isHovered = true;
-                container.style.cursor = 'pointer';
-            } else {
-                container.style.cursor = 'default';
+            if (activeHit !== hoveredKey) {
+                if (hoveredKey) {
+                    hoveredKey.userData.isHovered = false;
+                }
+                hoveredKey = activeHit;
+                if (hoveredKey) {
+                    hoveredKey.userData.isHovered = true;
+                    container.style.cursor = 'pointer';
+                } else {
+                    container.style.cursor = 'grab';
+                }
             }
         }
 
-        // Animate each of the 9 blocks
-        blocks.forEach((b) => {
-            const u = b.userData;
-            // 1. Organic wave floating: phase offset by row and col
-            const waveY = Math.sin(elapsedTime * 2.2 + (u.row + u.col) * 0.75) * 0.24;
+        // Animate each 3D button
+        buttons.forEach((key) => {
+            const u = key.userData;
 
-            // 2. Hover elevation boost
-            const hoverTarget = u.isHovered ? 0.75 : 0;
-            u.targetY = waveY + hoverTarget;
+            // 1. Subtle breathing wave
+            const wave = Math.sin(elapsedTime * 1.8 + (u.row + u.col) * 0.7) * 0.05;
 
-            // Smooth interpolation (lerp)
-            u.currentY += (u.targetY - u.currentY) * 0.12;
-            b.position.y = u.baseY + u.currentY;
+            // 2. Hover elevation lift
+            const hoverLift = u.isHovered ? 0.26 : 0;
+
+            // 3. Spring press recovery (lerp back to 0)
+            u.pressOffset += (0 - u.pressOffset) * 0.18;
+
+            // Compute target Z
+            u.targetZ = u.baseZ + wave + hoverLift + u.pressOffset;
+
+            // Smooth interpolation
+            u.currentZ += (u.targetZ - u.currentZ) * 0.14;
+            key.position.z = u.currentZ;
 
             // Subtle scale pulse on hover
-            const targetScale = u.isHovered ? 1.05 : 1.0;
-            b.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+            const targetScale = u.isHovered ? 1.03 : 1.0;
+            key.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
         });
 
-        // Smooth master grid rotation (mouse parallax)
-        masterGroup.rotation.y += (targetRotY - masterGroup.rotation.y) * 0.06;
-        masterGroup.rotation.x += (targetRotX - masterGroup.rotation.x) * 0.06;
+        // Smooth device rotation (dragged 3D rotation + hover parallax)
+        rotX += ((targetRotX + hoverTiltX) - rotX) * 0.08;
+        rotY += ((targetRotY + hoverTiltY) - rotY) * 0.08;
+
+        deviceGroup.rotation.x = rotX;
+        deviceGroup.rotation.y = rotY;
 
         renderer.render(scene, camera);
     }
 
     animate();
 
-    // --- Responsive Resize ---
-    window.addEventListener('resize', () => {
+    // --- Responsive Resize (Maintains generous padding across all viewports) ---
+    function handleResize() {
         if (!container) return;
         const newWidth = container.clientWidth;
-        const newHeight = container.clientHeight;
+        const newHeight = container.clientHeight || newWidth;
         if (newWidth === 0 || newHeight === 0) return;
 
-        camera.aspect = newWidth / newHeight;
+        const newAspect = newWidth / newHeight;
+        camera.aspect = newAspect;
+
+        // Adaptive camera distance: scales back on narrower screens so it never cuts off
+        camera.position.z = newAspect < 1 ? baseCameraZ / newAspect : baseCameraZ;
+
         camera.updateProjectionMatrix();
         renderer.setSize(newWidth, newHeight);
-    });
+    }
+
+    window.addEventListener('resize', handleResize);
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(handleResize);
+        ro.observe(container);
+    }
 })();
