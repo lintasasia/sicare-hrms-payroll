@@ -79,20 +79,20 @@
         };
     }
 
-    // --- Exact Original Palette & Items (Exact 2D match) ---
+    // --- Exact Original Palette & Items (Exact 2D match from original UI) ---
     const gridItems = [
         // Row 0
-        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#23459c', label: 'Lowongan Kerja' },
-        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#3d316e', label: 'Kartu Pegawai' },
-        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#322d7d', label: 'Struktur Tim' },
+        { row: 0, col: 0, icon: 'work', unicode: '\ue8f9', color: '#243b91', label: 'Lowongan Kerja' },
+        { row: 0, col: 1, icon: 'badge', unicode: '\uea67', color: '#3e2f6b', label: 'Kartu Pegawai' },
+        { row: 0, col: 2, icon: 'groups', unicode: '\uf233', color: '#322c7a', label: 'Struktur Tim' },
         // Row 1
-        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#20437d', label: 'Tugas & Cuti' },
-        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#443d63', label: 'Operasional' },
-        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\ue7e7', color: '#1d4686', label: 'Departemen' },
+        { row: 1, col: 0, icon: 'assignment', unicode: '\ue85d', color: '#1f4277', label: 'Tugas & Cuti' },
+        { row: 1, col: 1, icon: 'engineering', unicode: '\uea3d', color: '#423d61', label: 'Operasional' },
+        { row: 1, col: 2, icon: 'corporate_fare', unicode: '\uf1d0', color: '#1e4682', label: 'Departemen' },
         // Row 2
-        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#3d2b6e', label: 'Presensi ESS' },
+        { row: 2, col: 0, icon: 'co_present', unicode: '\ueaf0', color: '#3c2a6d', label: 'Presensi ESS' },
         { row: 2, col: 1, icon: 'leaderboard', unicode: '\uf20c', color: '#1c3f87', label: 'KPI & Laporan' },
-        { row: 2, col: 2, icon: 'handshake', unicode: '\uebc5', color: '#423561', label: 'Onboarding' }
+        { row: 2, col: 2, icon: 'handshake', unicode: '\uebcb', color: '#433660', label: 'Onboarding' }
     ];
 
     // --- Scene, Camera, Renderer ---
